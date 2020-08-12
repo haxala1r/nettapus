@@ -7,6 +7,7 @@ export TARGET="i686-elf"
 export AS="${TARGET}-as"
 export AR="${TARGET}-ar"
 export CC="${TARGET}-gcc"
+export LD="${TARGET}-ld"
 #gcc but with the right options for linking the kernel
 
 
@@ -26,15 +27,19 @@ export INCLUDEDIR="${PREFIX}/include" #libc will be here
 export LIB="${PREFIX}/lib" #will keep all of our .o .a and .c files.
 export LIBK="/libk" #libk will still be kept here
  
-#directories to loop over and build (and clean). each of these has its own build  and clean script
+#directories to loop over and build (and clean). each of these has its own build and clean script
 #that handles the entire directory, and puts important stuff to where they belong.
 export DIRS=""
 export DIRS="${DIRS} libk"
 export DIRS="${DIRS} kernel"
+export DIRS="${DIRS} bootloader"
 
 #directories that will be copied over to the image directory.
 #consists of the boot directory for now.
 export SYSDIRS=""
 export SYSDIRS="${SYSDIRS} boot"
 
+#the disk size in sectors. used by "qemu.sh" to make the loopback device closer
+#to reality.
+export DISKSIZE="108544"
 

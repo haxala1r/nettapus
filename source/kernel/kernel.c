@@ -22,7 +22,8 @@
 #include <tty.h>
 #include <stdint.h>
 #include <mem.h>
-
+#include <io.h>
+#include <disk/atapio.h>
 
 
 
@@ -35,7 +36,7 @@ void kernel_main(struct multiboot_header* mbd) {
 	memory_map_t* mm = getPhysicalMem();
 	char str[16];
 	memset(str, 0, 16);
-	
+	//just prints all memory it could detect.
 	for (size_t i = 0; i < mm->num_blocks; i++) {
 		xtoa(mm->blocks[i].base_page, str);
 		terminal_puts(str);
@@ -45,6 +46,12 @@ void kernel_main(struct multiboot_header* mbd) {
 		terminal_puts(str);
 		terminal_putc('\n');
 	}
+	
+	
+	//let's do a simple test to read sectors.
+	//uint8_t* ptr = kmalloc(512);	//to store the read bytes.
+	
+	
 	
 	
 	

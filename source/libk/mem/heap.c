@@ -372,7 +372,7 @@ uint8_t init_heap() {
 	kheap_default.first_free->next = NULL;
 	
 	//the heap should be fully functional now! all you need to do is simply
-	//use kmalloc and kfree, and you're done.
+	//use kmalloc and kfree, which will take care of most stuff for you.
 	
 	
 	return GENERIC_SUCCESS;

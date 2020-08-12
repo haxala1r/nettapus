@@ -1,7 +1,7 @@
 
 
 
-LIBS="vga tty mem string"
+LIBS="vga tty mem string disk disk/atapio"
 
 
 for LIB in ${LIBS}; do

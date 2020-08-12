@@ -242,7 +242,7 @@ uint8_t init_vmm() {
 	loadPageDirectory(kernel_page_dir.dir);
 	
 	kernel_page_dir.dir[2] = (kpimap()) | 0x2 | 0x1;	//read-write, present. allocates another page table.
-	
+	kernel_page_dir.dir[3] = (kpimap()) | 0x2 | 0x1;	//read-write, present. allocates yet another page table.
 	return GENERIC_SUCCESS;
 }
 
