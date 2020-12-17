@@ -3,6 +3,7 @@
 //for Virtual Memory Management (TM) and Physical Memory Management (TM) look at the other files in the same directory.
 
 #include <mem.h>
+#include <tty.h>
 //note that when it comes to the heap, we generally don't want stuff to be
 //ID mapped (at least its not a requirement). So we're generally just relying on
 //the Physical and Virtual Memory Managers (TMTMTM) to get us some free pages.
@@ -106,9 +107,19 @@ chunk_header_t* divideChunk(uint32_t size, chunk_header_t* chunk) {
 	//it shouldn't be hard to understand, but it somehow is.
 	chunk_header_t *c1 = chunk;
 	chunk_header_t *c2;
+	
+	
 	c2 = (chunk_header_t*)((uint32_t)chunk + size + sizeof(chunk_header_t));
+	
+	
 	c2->size = chunk->size - (size + sizeof(chunk_header_t));
+	if (chunk->next != NULL) {
+		//we have to update the surrounding chunks as well. 
+		//otherwise, everything could go downhill real quick.
+		chunk->next->prev = c2;		
+	}
 	c2->next = chunk->next;
+	
 	c2->prev = c1;
 	
 	
@@ -170,6 +181,14 @@ void *kmalloc(uint32_t bytes) {
 	while (chunk != NULL) {
 		if (chunk->size < bytes) {
 			//if the chunk's size is insufficient, then don't bother with it.
+			
+			//TODO: make it so that this algorithm can also merge chunks
+			//so that extremely small chunks that were requested do not go to waste.
+			//kfree() does already merge chunks as it goes, so this might be unnecessary,
+			//considering the size of the heap, but it might become important in some cases,
+			//so I should probably implement that sometime.
+			
+			
 			chunk = chunk->next;
 			continue;
 		} else if (chunk->size == bytes) {
@@ -189,16 +208,27 @@ void *kmalloc(uint32_t bytes) {
 				//then return it.
 				
 				
-				//keep in mind if we chop this up, we must also update first_free
-				//of the heap we're using.
-				hp->first_free = divideChunk(bytes, chunk);	//returns the second chunk, look at the function.
+				//keep in mind if we chop this up, we must also update the
+				//next and previous chunks so that the new-born chunk
+				//is recognized as a proper free chunk.
+				
+				chunk_header_t* newchunk = divideChunk(bytes, chunk);	//returns the second chunk, look at the function.
+				if (chunk->prev != NULL) {
+					chunk->prev->next = newchunk;
+				}
+				if (chunk->next != NULL) {
+					chunk->next->prev = newchunk;
+				}
+				
+				//UPDATE: We must also update first_free if this is the first
+				//chunk we encountered.
+				if (chunk == hp->first_free) {
+					hp->first_free = newchunk;
+				}
 				
 				
-				
-				
-				//chunk should now hold the chunk with the requested size.
-				
-				unlink(chunk);
+				//chunk should now hold the chunk with the requested size,
+				//and should be ready-for-use.
 				
 				//again, this part could probably be made to look less insane, but whatever.
 				return (void*)(((uint32_t)chunk) + sizeof(chunk_header_t));
@@ -215,10 +245,10 @@ void *kmalloc(uint32_t bytes) {
 			
 		}
 	}
+	//if it reaches here, we must have gone through the entire heap, 
+	//and there was no matching chunks. return NULL in this case.
 	
-	
-	
-	
+	return NULL;
 }
 
 
@@ -269,6 +299,18 @@ uint8_t kfree(void *ptr) {
 			return GENERIC_SUCCESS;
 		}
 		
+		//this also merges some chunks if it finds any adjacent chunks while searching for matches
+		if ((((uint32_t)i) + sizeof(chunk_header_t) + i->size) == ((uint32_t)j)) {
+			//update stuff, merge the chunks then re-do the iteration.
+			chunk_header_t* temp = j->next;
+			mergeChunk(i, j);
+			j = temp;	
+			continue;
+		}
+		
+		
+		
+		
 		if ((chunk > i) && (chunk < j)) {
 			//if chunk is between i and j, then we just found exactly where
 			//we need to put chunk in, hurray!
@@ -281,17 +323,10 @@ uint8_t kfree(void *ptr) {
 			return GENERIC_SUCCESS;
 		}
 		
-		//this also merges some chunks if it finds any adjacent chunks while searching for matches
-		if ((((uint32_t)i) + sizeof(chunk_header_t) + i->size) == ((uint32_t)j)) {
-			//update stuff, merge the chunks then re-do the iteration.
-			chunk_header_t* temp = j->next;
-			mergeChunk(i, j);
-			j = temp;	
-			continue;
-		}
 		
 		
-		//now skip the next iteration. this repeats until a match is found.
+		
+		//now skip to the next iteration. this repeats until a match is found.
 		i = j;
 		j = j->next;
 	}
@@ -300,24 +335,16 @@ uint8_t kfree(void *ptr) {
 
 //allocates more pages for heap usage. Takes argument in bytes,
 //rounded up to multiple of 4096 (0x1000) because of paging.
-uint8_t enlargeHeap(uint32_t amount /*in bytes*/) {
+uint8_t kenlargeHeap(uint32_t amount /*in bytes*/) {
 	uint32_t amount_pages = addr_to_page(amount) + 1;	//rounds up.
 	
 	heap_t *hp = kgetHeap();
 	//if no heap is present yet, then make one by allocating literally a single page.
 	//note: type casts are generally there to shut the compiler up.
 	if ((void*)hp->start == NULL) {
-		//determine the first page of the heap. keep in mind that 
-		//if you call this again and the vp after this isn't avilable,
-		//then it literally won't be able to enlarge the heap any further.
-		hp->start = kpmap();
-		if ((void*)hp->start == NULL) {
-			//then kpmap() must have failed. we don't have much to do here then, 
-			//so just return an error.
-			return 1;
-		}	
-		hp->end = hp->start + 0x1000;	//since we just allocated a page.
-		amount_pages--;		//again, since we just allocated a page.
+		return 1;
+		/* YOU SHOULD ALWAYS SET UP THE 
+		   FIRST PAGE OF THE HEAP YOURSELF. */
 	}
 	
 	
@@ -325,6 +352,9 @@ uint8_t enlargeHeap(uint32_t amount /*in bytes*/) {
 	//starting from the end of the current heap (in the virtual address space.)
 	
 	for (size_t i = 0; i < amount_pages; i++) {
+		if ((void*)hp->end == NULL) {
+			return 1;	//then we got a huge fucking problem. I should probably handle this, but fuck that.
+		}
 		if (!kmmapv(hp->end)) {
 			//if successful, then we gotta increment HEAP_END
 			hp->end += 0x1000;
@@ -344,16 +374,29 @@ uint8_t init_heap() {
 	//functions you can make. the original "init_memory" already calls this,
 	//if you haven't edited it out.
 	
-	//allocates 20 pages for the initial heap. this is to make absolutely sure
-	//that the VMM (TM) can definitely allocate room for more page tables
-	//if needed. and trust me, it will be needed. 
-	//P. S. I actually changed how the VMM worked later on, so now it doesn't rely on the heap,
-	//and it shouldn't. it simply allocates another page using itself, and works with that.
-	//still, a heap is pretty much essential, so I guess we can't run away from it.
+	
+	
+	//allocates some space for the initial heap.
+	
+	//we first gotta make the inital heap, then we'll enlarge it.
+	if (kmmapv(0xC0400000)) { //because I believe this address would be the best to start the heap at.
+		return 1;
+	}	
+	kheap_default.start = 0xC0400000;	
+
+
+	if ((void*)kheap_default.start == NULL) {
+		//then kpmap() must have failed. we don't have much to do here then, 
+		//so just return an error.
+		return 1;
+	}	
+	kheap_default.end = kheap_default.start + 0x1000;	
 	
 	
 	
-	enlargeHeap(page_to_addr(20));	//page_to_addr can be used to translate pages to bytes as well.	
+	//okay, done. Now we enlarge it using this function. kmalloc will try to enlarge
+	//the heap when necessary, so this number does not really matter.
+	kenlargeHeap(page_to_addr(20));	//page_to_addr can be used to translate pages to bytes as well.	
 	
 	//now we make the first chunk, "the wilderness" as some would say.
 	//whenever we need a chunk, we will simply chop a part of this chunk,

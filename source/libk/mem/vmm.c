@@ -14,9 +14,25 @@ uint32_t spage_table[1024] __attribute__((aligned(4096)));
 page_directory_t kernel_page_dir __attribute__((aligned(4096)));	//page directory for the kernel process.
 //I wanted this to be used internally for the VMM (TM), so I got it here. you can stil get a pointer to it with:
 page_directory_t* kgetPageDir() {
+	//return (page_directory_t*)0xFFFFF000;	//since we're doing the self-reference trick, we can just say this.
+	//EDIT: I edited this out, because this completely breaks the physical_address
+	//attribute of a page_directory_t. Think about it for a while, I'm sure you'll
+	//get why. And if you don't, too bad!
 	return &kernel_page_dir;
 }
 //...though.
+
+
+void kflush_page_dir() {
+	//just loads the kernel's page directory.
+	//loadPageDirectory((uint32_t*)((uint32_t)(kgetPageDir()) - 0xC0000000));
+	loadPageDirectory((uint32_t*)(kgetPageDir()->physical_address));
+	return;
+}
+
+
+
+
 
 
 uint8_t isvpMapped(uint32_t vp, page_directory_t *pd) {
@@ -60,12 +76,14 @@ uint8_t mapPage(uint32_t pp, uint32_t vp, page_directory_t *pd) {
 		return 1;
 	}
 	if (isvpMapped(vp, pd)) {
+		
 		return 1;	//can't map to it if the vp is already mapped to some address.
 	}
 	
 	if ((pd->dir[vp / 1024] & 0xFFFFF000) == 0x00000000) {
 		//the virtual page literally isn't available, not much we can do here.
 		//we should return a unique error to show the need for more page tables.
+		
 		return 2;
 	}
 	uint32_t table_num = vp / 1024;	//get the table.
@@ -149,7 +167,7 @@ uint8_t kpmappv(uint32_t pp, uint32_t vp) {
 		
 	}*/
 	
-	loadPageDirectory(kernel_page_dir.dir);	//"flush"
+	kflush_page_dir();	//we need to "refresh" the MMU or something like that, which means we gotta re-load it.
 	return 0;
 }
 
@@ -203,7 +221,7 @@ uint32_t kpumap(uint32_t page_num) {
 	if (unmapPage(page_num, kgetPageDir())) {
 		return 1;
 	} else {
-		loadPageDirectory(kernel_page_dir.dir);
+		kflush_page_dir();
 		return 0;
 	}
 }
@@ -216,16 +234,22 @@ uint32_t kpumap(uint32_t page_num) {
 uint8_t init_vmm() {
 	memory_map_t *pm = getPhysicalMem();
 	initPageDir(&kernel_page_dir);	//initialise the page directory for the kernel
-	char str[16];
-	memset(str, 0, 16);
-	kernel_page_dir.dir[0] = ((uint32_t)(&fpage_table)) | 0x2 | 0x1;
+	
+	//this one is something that worries me: I have absolutely no clue why,
+	//but it won't let me edit this out. if I do, the OS just crashes.
+	//so for now, this line is going to stay, though I'd much rather remove it.
+	kernel_page_dir.dir[0] = ((uint32_t)(&fpage_table) - 0xC0000000) | 0x2 | 0x1;
+	
+	
+	
+	kernel_page_dir.dir[768] = ((uint32_t)(&fpage_table) - 0xC0000000) | 0x2 | 0x1;
 	//added a second page table to actually be able to create heap outside of the first allocated 4M. 
-	kernel_page_dir.dir[1] = ((uint32_t)(&spage_table)) | 0x2 | 0x1;
+	kernel_page_dir.dir[769] = ((uint32_t)(&spage_table) - 0xC0000000) | 0x2 | 0x1;
 	
 	//essentially, we map the last entry to the directory itself.
 	//this makes it easier to access this thing, as it is literally always at a fixed virtual address.
 	//now 0xffc00000 always points to the start of the page directory.
-	kernel_page_dir.dir[1023] = ((uint32_t)kernel_page_dir.dir) | 0x2 | 0x1;	//map the last entry to itself.
+	kernel_page_dir.dir[1023] = ((uint32_t)kernel_page_dir.dir - 0xC0000000) | 0x2 | 0x1;	//map the last entry to itself.
 	
 	/* 
 	 * we need to do the area below 1M manually because the PMM considers it
@@ -234,15 +258,23 @@ uint8_t init_vmm() {
 	 * the end of the kernel.
 	 */
 	 
-	for (size_t i = 0; i < (addr_to_page((uint32_t)&kernel_end)); i++) {
+	for (size_t i = 0; i < 1024; i++) {
+		if (i >= 1024) {
+			return 1;   //just in case something happens.
+		}
 		fpage_table[i] = (page_to_addr(i)) | 0x2 | 0x1;
 		setppUsed(i, 1);	//mark the physical page as used, because... it kind of... is?
 	}
 	
-	loadPageDirectory(kernel_page_dir.dir);
+	//I should really implement a way of getting more page tables in.
 	
-	kernel_page_dir.dir[2] = (kpimap()) | 0x2 | 0x1;	//read-write, present. allocates another page table.
-	kernel_page_dir.dir[3] = (kpimap()) | 0x2 | 0x1;	//read-write, present. allocates yet another page table.
+	
+	
+	
+	loadPageDirectory((uint32_t*)(kernel_page_dir.physical_address));
+	
+	
+	
 	return GENERIC_SUCCESS;
 }
 

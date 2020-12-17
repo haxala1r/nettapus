@@ -68,7 +68,15 @@ typedef struct {
    #define USABLE_MEM 1
 } __attribute__ ((packed)) mboot_memmap_t;
 
-
+typedef struct {
+	uint32_t size;
+	uint8_t drive_number;
+	uint8_t drive_mode;
+	uint16_t cylinders;
+	uint8_t heads;
+	uint8_t sectors;
+	uint16_t port_start;
+} __attribute__ ((packed)) mboot_drive_t;	//I gave up on this idea, so it's kinda useless right now.
 
 #ifdef __cplusplus
 }

@@ -9,15 +9,18 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
 #include <multiboot.h>
+
 //these should be defined globally in boot.S
 //simply because I can't get 'em to work 'ere.
 //they're only here because other functions may depend on them
-extern void loadPageDirectory(uint32_t*);
-extern void enablePaging();
+extern void  loadPageDirectory(uint32_t*);
+extern void  enablePaging();
 //extern void disablePaging();	this doesn't exist. you can't run away from paging. you either enable it or you don't.
 
 //keep in mind the *address* of these variables indicate the start and end of the kernel.
@@ -31,7 +34,7 @@ extern uint32_t kernel_end;
 //structs and types for paging stuff.
 
 struct memory_block {
-	uint32_t base_page;  	//page number it starts at. Each page is 4KB
+	uint32_t base_page;  	//page number it starts at. Each page is 4KB. to get the address, simply multiply it with 0x1000
 	uint32_t length;		//length in pages.
 };
 
@@ -51,6 +54,10 @@ struct memory_map {
 
 struct page_directory {
 	uint32_t dir[1024] __attribute__((aligned(4096))); //at most 1024 entries.
+	
+	//this is because we need the physical address a page directory is stored in
+	//if we want to actually *load* the page directory.
+	uint32_t physical_address;
 }	__attribute__((aligned(4096))) __attribute__((packed));
 
 
@@ -58,7 +65,7 @@ struct page_directory {
 
 
 
-//fot he heap. stores crucial information about a chunk.
+//for he heap. stores crucial information about a chunk.
 struct chunk_header {
 	//first bit of this tells you whether or not it is in use. 1=used, 0=free.
 	//also this is the size of its "data section" and thus excludes the header itself.
@@ -142,10 +149,11 @@ uint32_t kpmap();	//maps a random physical page to a random virtual page, and re
 uint32_t kpumap(uint32_t);	//unmaps a page from the kernel page directory.
 
 
-//Heap (TM) management. (it's kinda trash, but it works okay?)
+//Heap (TM) management. (it's kinda trash, but it works okay i guess?)
 uint8_t unlink(chunk_header_t*);	//unlinks a chunk from the linked list
 uint8_t link(chunk_header_t*, chunk_header_t*);	//links two chunks to each other.
-
+void* kmalloc(uint32_t);
+uint8_t kfree(void*);
 
 
 
@@ -155,7 +163,7 @@ uint8_t init_vmm();								//Virtual  Memory Manager (TM)
 uint8_t init_heap();							//Heap			  Manager (TM)
 
 //initialises everything (a.k.a. calls the three functions declared above.)
-void init_memory(struct multiboot_header*);	
+uint8_t init_memory(struct multiboot_header*);	
 
 
 

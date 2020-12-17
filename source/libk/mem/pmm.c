@@ -6,7 +6,7 @@
 #include <mem.h>
 
 
-memory_map_t physical_memory;
+memory_map_t physical_memory ;
 
 memory_map_t* getPhysicalMem() {
 	return &physical_memory;
@@ -151,6 +151,16 @@ uint8_t freepp(uint32_t page) {
 
 
 uint8_t init_pmm(struct multiboot_header* mbh) {
+	
+	if (!(mbh->flags & 0b1000000)) {
+		/* if we reach here, then bit 6 is not set, meaning mmap_* fields
+		 * of the multiboot header are not valid. We currently cannot retrieve
+		 * a reliable physical memory map without those fields, so we return an error.
+		 * I can hopefully change this in the future.
+		 */
+		 return 1;
+	}
+	
 	mboot_memmap_t *entry = (mboot_memmap_t*) mbh->mmap_addr;
 	physical_memory.num_blocks = 0;
 	while ((uint32_t)entry < mbh->mmap_addr + mbh->mmap_length) {

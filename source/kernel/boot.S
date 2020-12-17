@@ -19,17 +19,21 @@ forced to be within the first 8 KiB of the kernel file.
 .long CHECKSUM
  
 //this is a small stack, and it's for kernel usage.
-.section .bss
+.section .text.kernelprep
 .align 16
 stack_bottom:  
 .skip 16384 # 16 KiB
+.skip 16384
+.skip 16384
 stack_top:
  
 
 	
+mbd:
+.skip 4
+
 	
-	
-.section .text
+.section .text.kernelprep
 .global _start
 .type _start, @function
 _start:
@@ -37,17 +41,44 @@ _start:
 	and we can do whatever the hell we want here. */
 	/*we'll enable paging, set up the kernel in the higher half, then
 	call the kernel. a lot to do, if you ask me.*/
-	/*Well apparently I suck at this so I gave up on that last part.*/
-
+	
+	
 	
 
 
 	mov $stack_top, %esp
 	
-	push %ebx
+	mov %ebx, mbd
 	
-	call kernel_main
- 
+	/*this will set a temporary page directory and enable paging.
+	after this returns, we will want to switch to the proper stack,
+	since we were using a temporary address before. then the function after
+	this will set up a proper page directory, and then we can call kernel_main
+	with the multiboot header as a parameter.*/
+	
+	call kernel_prep1
+	
+	
+	/* after this returns, we add 0xC0000000 to sp, beacuse this
+	is a higher-half kernel, and the new stack pointer
+	will be equal to 0xC0000000 + old sp. Hope that is clear enough.*/
+	
+	mov $stack_top, %eax
+	add $0xC0000000, %eax
+	mov %eax, %esp
+	mov %esp, %ebp
+	
+	mov mbd, %ebx
+	push %ebx
+	/* we pass the multiboot header thing (which gives us info about the system)
+	to this function. kernel_prep2 is responsible for properly
+	setting up the Memory Manager (TM) and making sure the heap and
+	basically everything else is working properly. kernel_prep2()
+	is not supposed to return. it should instead unmap the part of memory
+	(which contains this function as well) and (after setting everything up)
+	pass control to kernel_main.*/
+	call kernel_prep2
+	
 	
 	cli
 1:	hlt
@@ -59,28 +90,39 @@ This is useful when debugging or when you implement call tracing.
 */
 .size _start, . - _start
 
-/*some functions to do paging. called from the kernel. */
+/* some functions to do paging. called from the kernel. */
+.section .text
+
 .globl loadPageDirectory
+.type loadPageDirectory, @function
 loadPageDirectory:
+
 	push %ebp
 	mov %esp, %ebp
+	
 	mov 8(%esp), %eax
 	mov %eax, %cr3
+	
 	mov %ebp, %esp
 	pop %ebp
+	
 	ret
 
 .globl enablePaging
+.type enablePaging, @function
 enablePaging:
 	push %ebp
 	mov %esp, %ebp
+	
 	mov %cr0, %eax
 	or $0x80000000, %eax
 	mov %eax, %cr0
+	
 	mov %ebp, %esp
 	pop %ebp
 	ret
 	
+
 
 
 

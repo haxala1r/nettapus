@@ -23,7 +23,7 @@ struct {
 void init_terminal() {
 	terminal.row = 0;
 	terminal.column = 0;
-	terminal.buff = (uint16_t*) 0xB8000;
+	terminal.buff = (uint16_t*) 0xC00B8000;
 	terminal.color = vga_entry_color(VGA_LIGHT_GREY, VGA_BLACK);
 	
 	for (size_t i = 0; i < VGA_HEIGHT; i++) {

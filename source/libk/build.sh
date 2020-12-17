@@ -1,6 +1,6 @@
 #!/bin/sh
 echo "[libk/build.sh] building libk..."
-LIBS="vga tty mem string disk disk/atapio"
+LIBS="vga tty mem string pci"
 
 OBJS=""
 

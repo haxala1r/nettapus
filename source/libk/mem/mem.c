@@ -1,6 +1,6 @@
 
 #include <mem.h> 
-#include <tty.h>
+
 //generic memory operations and the physical memory allocator is in this file.
 
 uint8_t PAGING_ENABLED = 0;
@@ -50,11 +50,12 @@ void initPageDir(page_directory_t *pd) {
 	for (size_t i = 0; i < 1024; i++) {
 		
 		//read/write, not present. we will make space for page tables later.
-		for (size_t i = 0; i < 1024; i++) {
-			pd->dir[i] =  0x00000002;
-		}
+		
+		pd->dir[i] =  0x00000002;
+		
 		
 	}
+	pd->physical_address = ((uint32_t)pd) - 0xC0000000;
 }
 
 
@@ -63,36 +64,33 @@ void initPageDir(page_directory_t *pd) {
 
 
 
-void init_memory(struct multiboot_header *mbh) {
-	if (mbh->flags & 0b1000000) {
-		//bit 6 is set, we can retrieve our memory map.
-		if (init_pmm(mbh)) {
-			terminal_puts("Can't start PMM (TM)\n");
-			return;
-		}
-		
-		if (init_vmm()) {
-			terminal_puts("Can't start VMM (TM)\n");
-			return;
-		}
-		
-		//init_vmm loads the page directory automatically.
-		//all we need to do is enable paging, and we should be done.
-		enablePaging();
-		PAGING_ENABLED = 1;
-		
-		//now that Paging is fully set up, we can set up the heap.
-		if (init_heap()) {
-			terminal_puts("Can't initalise the Heap (TM)\n");
-			return;
-		}
-		
-		//if we reached here, then everything must have went well.
-		//we can safely return.
-		return;
-		
-		
+uint8_t init_memory(struct multiboot_header *mbh) {
+
+	if (init_pmm(mbh)) {
+		return 1;
 	}
+	
+	if (init_vmm()) {
+		return 2;
+	}
+	
+	//init_vmm loads the page directory automatically.
+	//all we need to do is enable paging, and we should be done.
+	enablePaging();
+	PAGING_ENABLED = 1;
+	
+	
+	//now that Paging is fully set up, we can set up the heap.
+	if (init_heap()) {
+		return 3;
+	}
+	
+	//if we reached here, then everything must have went well.
+	//we can safely return.
+	return GENERIC_SUCCESS;
+	
+	
+
 }
 
 
