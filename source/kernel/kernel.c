@@ -26,14 +26,14 @@
 #include <mem.h>
 #include <io.h>
 #include <pci.h>
-
+#include <ide.h>
 
 void kernel_main();	//defining it here so that kernel_prep2 can call it.
 
 
 void kernel_prep2(struct multiboot_header *mbh) {
-	
-		
+	//this function does the initialisation of pretty much everything.
+	//then calls the kernel.
 	
 	//init_memory starts everything memory-management related.
 	//namely; PMM, VMM and the heap. This is done first because a lot of
@@ -51,6 +51,14 @@ void kernel_prep2(struct multiboot_header *mbh) {
 	//why not add this while preparing everything. I'll probably swap this
 	//out for proper initalisation of the file systems and a proper tty.
 	init_terminal();	
+	
+	
+	//PCI, IDE and shit
+	pci_scan_all_buses();
+	init_ide();
+	
+	
+	
 	
 	
 	//now we hand over the control of execution to the kernel, and we're done!
@@ -108,20 +116,10 @@ void __attribute__((section(".text.kernelprep"))) kernel_prep1()  {
 
 
 void kernel_main() {
-	
-	
-	char str[16] = {};
 	terminal_puts("Hello from the kernel! \n");
 	
-	//some sample code to test out PCI.
-	//initialises PCI, and lists every device scanned.
-	pci_scan_all_buses();
-	pci_print_devices();
 	
-	
-	
-	
-	
+	ide_print_devs();
 	
 	
 };

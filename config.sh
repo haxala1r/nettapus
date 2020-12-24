@@ -32,6 +32,7 @@ export LIBK="/libk" #libk will still be kept here
 export DIRS=""
 export DIRS="${DIRS} libk"
 export DIRS="${DIRS} kernel"
+#export DIRS="${DIRS} bootloader"
 
 #directories that will be copied over to the image directory.
 #consists of the boot directory for now.

@@ -34,6 +34,7 @@ typedef struct pci_device pci_device_t;		//it's a linked list.
 uint32_t pci_get_address(uint8_t bus, uint8_t slot, uint8_t func);
 uint32_t pci_read_field(uint32_t address, uint8_t offset);
 void pci_write_field(uint32_t address, uint8_t offset, uint32_t value);
+void pci_set_bar(uint32_t address, uint8_t bar, uint32_t value);
 
 void pci_reg_device(uint8_t bus, uint8_t slot, uint8_t func);
 void pci_check_function(uint8_t bus, uint8_t slot, uint8_t func);

@@ -27,6 +27,13 @@ void pci_write_field(uint32_t address, uint8_t offset, uint32_t value) {
 	outl(PCI_VALUE_PORT, value);
 };
 
+//stuff to set BARs
+
+void pci_set_bar(uint32_t address, uint8_t bar, uint32_t value) {
+	pci_write_field(address, (0x10 + 4 * bar), value);
+}
+
+
 
 //some stuff to retrieve regularly used information.
 
@@ -173,7 +180,7 @@ void pci_scan_bus(uint8_t bus) {
 		uint32_t address = pci_get_address(bus, slot, 0);
 		uint16_t header_type = pci_get_header_type(address);
 		
-		if (header_type & 0b10000000) {
+		if (header_type & 0x80) {
 			//this basically means it's a multifunction device if we reach here.
 			for (uint8_t func = 0; func < 8; func++){
 				pci_check_function(bus, slot, func);
@@ -206,6 +213,13 @@ uint8_t pci_scan_all_buses() {
 	}
 	
 };
+
+
+
+
+
+
+
 
 
 void pci_print_devices() {

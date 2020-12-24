@@ -40,8 +40,21 @@ then
 	#now we gotta create the disk image.
 	grub-mkrescue "./image/" -o disk.iso
 	
+	#and now make a tarball out of the "image" direcory and burn that to
+	#disk.iso and done
+	
+	
 	echo "[main] ISO done. now you can test it."
 	
 else 
 	echo "[main] it didn't come out as multiboot, can't generate ISO."
+	
 fi
+
+
+
+
+
+
+
+

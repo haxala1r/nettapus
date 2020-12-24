@@ -22,12 +22,12 @@ losetup /dev/loop0 /tmp/tempzero
 dd if=disk.iso of=/dev/loop0
 sync
 #now we can do stuff.
-qemu-system-i386 -drive file=/dev/loop0,format=raw
+qemu-system-i386 -drive file=/dev/loop0,format=raw 
 
 losetup -d /dev/loop0
 
 rm /tmp/tempzero
-
+sync
 
 #all that talk and it's 8 lines eh?
 #programming really is like a joke sometimes. That's why I love it.

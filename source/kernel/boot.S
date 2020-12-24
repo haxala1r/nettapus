@@ -42,7 +42,7 @@ _start:
 	/*we'll enable paging, set up the kernel in the higher half, then
 	call the kernel. a lot to do, if you ask me.*/
 	
-	
+	cli
 	
 
 
