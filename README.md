@@ -16,12 +16,12 @@ You also need to have grub and xorriso packages.installed, since the build scrip
 First of all, I'm currently trying my best to ensure that this OS will run both on QEMU and real hardware. 
 My current goal is to make sure that this OS is actually usable after I'm done with it. 
 Some more specific and short-term "goals":
+
 	- Switch to higher half. Done.
 	- Set up paging. Done.
 	- Add a proper memory manager, as well as a heap. Done.
 	- Set up interrupts.
-	- Set up threading, multitasking, IPC and related things.
-	
+	- Set up threading, multitasking, IPC and related things.	
 	- Add PCI support. Done.
 	- Add an ATA PIO driver. Done.
 	- Add an ATA DMA driver.
