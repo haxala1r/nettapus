@@ -13,6 +13,6 @@ done;
 cd "${SYSROOT}/.."
 
 rm -rf image/
-rm disk.iso
+rm disk.img
 
 

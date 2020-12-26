@@ -3,7 +3,7 @@
 //for Virtual Memory Management (TM) and Physical Memory Management (TM) look at the other files in the same directory.
 
 #include <mem.h>
-#include <tty.h>
+
 //note that when it comes to the heap, we generally don't want stuff to be
 //ID mapped (at least its not a requirement). So we're generally just relying on
 //the Physical and Virtual Memory Managers (TMTMTM) to get us some free pages.
@@ -396,7 +396,7 @@ uint8_t init_heap() {
 	
 	//okay, done. Now we enlarge it using this function. kmalloc will try to enlarge
 	//the heap when necessary, so this number does not really matter.
-	kenlargeHeap(page_to_addr(20));	//page_to_addr can be used to translate pages to bytes as well.	
+	kenlargeHeap(page_to_addr(50));	//page_to_addr can be used to translate pages to bytes as well.	
 	
 	//now we make the first chunk, "the wilderness" as some would say.
 	//whenever we need a chunk, we will simply chop a part of this chunk,

@@ -3,7 +3,7 @@
 //for Heap (TM) and Physical Memory Management (TM) look at the other files in the same directory.
 
 #include <mem.h>
-#include <tty.h>
+
 
 
 //the first two page tables are provided within the binary. cuz why not?
@@ -207,11 +207,7 @@ uint32_t kpimap() {
 	uint32_t pp = allocpp();
 	freepp(pp);
 	while (idMapPage(pp, kgetPageDir()) == 1) {
-		char str[16];
-		xtoa(pp, str);
-		terminal_puts(str);
-		//simple loop to find an id-mappable page, then return its addres
-
+		//simple loop to find an id-mappable page, then return its address.
 		pp++;	//simply try the next one.
 	}
 	return page_to_addr(pp);

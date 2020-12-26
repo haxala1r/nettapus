@@ -19,7 +19,7 @@ dd if=/dev/zero of=/tmp/tempzero count=${DISKSIZE}
 losetup /dev/loop0 /tmp/tempzero
 
 #after setting up a blank loopback device all we need to do is burn the disk image into it.
-dd if=disk.iso of=/dev/loop0
+dd if=disk.img of=/dev/loop0
 sync
 #now we can do stuff.
 qemu-system-i386 -drive file=/dev/loop0,format=raw 

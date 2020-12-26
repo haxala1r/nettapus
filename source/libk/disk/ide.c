@@ -1,6 +1,8 @@
 
 
-#include <ide.h>
+#include <disk/ide.h>
+#include <pci.h>
+#include <mem.h>
 
 ide_drive_t* ide_first_drive;
 ide_bus_t* ide_first_bus;
@@ -64,6 +66,9 @@ uint8_t ide_pio_read28(uint16_t drive_id, uint32_t starting_lba, uint8_t sector_
 	}
 	if (buf == NULL) {
 		return 1;
+	}
+	if (drive->lba28_sectors == 0) {
+		return 1;	//drive does not support lba28.
 	}
 	
 	
@@ -131,6 +136,9 @@ uint8_t ide_pio_write28(uint16_t drive_id, uint32_t starting_lba, uint8_t sector
 	}
 	if (buf == NULL) {
 		return 1;
+	}
+	if (drive->lba28_sectors == 0) {
+		return 1;	//drive does not support lba28.
 	}
 	
 		
@@ -262,16 +270,10 @@ uint8_t ide_identify_noid(uint16_t io_base, uint8_t slave, uint16_t* buf) {
 };
 
 
-void ide_register_disk(uint16_t id, uint16_t io, uint16_t control, uint8_t slave) {
+void ide_register_disk(	uint16_t id, uint16_t io, uint16_t control, uint8_t slave, uint32_t max_lba28) {
+	
 	/* 
-	 * this adds a disk to the list, but not if a disk with that id 
-	 * already exists. This is not a bug. This is how it's supposed to work.
-	 * that's because ide_refresh_disks assigns ID's based on the addresses
-	 * used to access a disk. This means a disk will always have the same ID.
-	 * newly added disks also follow this, so it's impossible for 2 disks to have
-	 * the same id anyway. Which means, if that hppens, it's because ide_refresh_disks()
-	 * was called, and thus that specific disk doesn't need to be re-registered.
-	 * Thanks for coming to my TED talk.
+	 * this adds a disk to the list, and if that disk already exists, refreshes its data.
 	 */
 	 
 	 
@@ -280,11 +282,13 @@ void ide_register_disk(uint16_t id, uint16_t io, uint16_t control, uint8_t slave
 	ndrive->io_port_base = io;
 	ndrive->control_port_base = control;
 	ndrive->slave = slave;
+	ndrive->lba28_sectors = max_lba28;
 	ndrive->next = NULL;
 	 
 	//if no drives exist yet, simply add it.
 	if (ide_first_drive == NULL) {
 		ide_first_drive = ndrive;
+		return;
 	}
 	 
 	//first, we need to get to the last element.
@@ -292,6 +296,9 @@ void ide_register_disk(uint16_t id, uint16_t io, uint16_t control, uint8_t slave
 	ide_drive_t* i = ide_first_drive;
 	while (1) {
 		if (i->drive_id == id) {
+			//a disk with that id exists. no need for the allocation we made for ndrive.
+			//we just update the entry, then free the memory we allocated.
+			*i = *ndrive;
 			kfree(ndrive);
 			return;	//the device already exists.
 		}
@@ -319,8 +326,29 @@ void ide_register_disk(uint16_t id, uint16_t io, uint16_t control, uint8_t slave
 void ide_refresh_disks() {
 	//re-loads all the information about all disks on the system.
 	//can also be used to load all disks at the start.
+	
+	//discard the list if it already exists.
+	if (ide_first_drive != NULL) {
+		ide_drive_t* j = ide_first_drive;
+		ide_drive_t* k = j->next;
+		while (1) {
+			kfree(j);
+			j = k;
+			
+			if (j == NULL) {
+				break;
+			}
+			k = k->next;
+		}
+		ide_first_drive = NULL;
+	}
+	
+	
+	
 	uint8_t i = 0;	//a simple iterator to determine the disk IDs.
 	ide_bus_t* ibus = ide_get_first_bus();
+	uint16_t* buf = kmalloc(512);	//used to temporarily store identify info.
+	
 	while (1) {
 		if (ibus == NULL) {
 			break;
@@ -332,11 +360,11 @@ void ide_refresh_disks() {
 		}
 		
 		//check and register drives.
-		if (!ide_identify_noid(ibus->io_base, 0, NULL)) {
-			ide_register_disk(i * 4, ibus->io_base, ibus->control_base, 0);
+		if (!ide_identify_noid(ibus->io_base, 0, buf)) {
+			ide_register_disk(i * 4, ibus->io_base, ibus->control_base, 0, buf[60] | (buf[61] << 16));
 		}
-		if (!ide_identify_noid(ibus->io_base, 1, NULL)) {
-			ide_register_disk(i * 4 + 1, ibus->io_base, ibus->control_base, 1);
+		if (!ide_identify_noid(ibus->io_base, 1, buf)) {
+			ide_register_disk(i * 4 + 1, ibus->io_base, ibus->control_base, 1, buf[60] | (buf[61] << 16));
 		}
 		
 		
@@ -346,18 +374,18 @@ void ide_refresh_disks() {
 		}
 		
 		//check and register drives.
-		if (!ide_identify_noid(ibus->secondary_io_base, 0, NULL)) {
-			ide_register_disk(i * 4 + 2, ibus->secondary_io_base, ibus->secondary_control_base, 0);
+		if (!ide_identify_noid(ibus->secondary_io_base, 0, buf)) {
+			ide_register_disk(i * 4 + 2, ibus->secondary_io_base, ibus->secondary_control_base, 0, buf[60] | (buf[61] << 16));
 		}
-		if (!ide_identify_noid(ibus->secondary_io_base, 1, NULL)) {
-			ide_register_disk(i * 4 + 3, ibus->secondary_io_base, ibus->secondary_control_base, 1);
+		if (!ide_identify_noid(ibus->secondary_io_base, 1, buf)) {
+			ide_register_disk(i * 4 + 3, ibus->secondary_io_base, ibus->secondary_control_base, 1, buf[60] | (buf[61] << 16));
 		}
 		
 		
 		i++;
 		ibus = ibus->next;
 	}
-	
+	kfree(buf);
 }
 
 
@@ -447,19 +475,5 @@ void init_ide() {
 	}
 	ide_refresh_disks();
 };
-
-
-void ide_print_devs() {
-	ide_drive_t* i = ide_get_first_drive();
-	while (i != NULL) {
-		char str[16] = {};
-		xtoa(i->drive_id, str);
-		terminal_puts(str);
-		terminal_putc(' ');
-		i = i->next;
-	}
-	
-};
-
 
 

@@ -9,7 +9,7 @@ extern "C" {
 #include <stddef.h>
 #include <io.h>
 #include <mem.h>
-#include <tty.h>
+
 
 #define PCI_ADDRESS_PORT 0xcf8
 #define PCI_VALUE_PORT	0xcfc
@@ -42,7 +42,6 @@ void pci_scan_bus(uint8_t bus);
 uint8_t pci_scan_all_buses();
 pci_device_t* pci_get_first_dev();	//gets you the first device in the linked list.
 
-void pci_print_devices();	//prints out every PCI device. This is here for debugging, and it won't stay for long.
 
 
 

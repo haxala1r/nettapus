@@ -12,7 +12,7 @@ export LD="${TARGET}-ld"
 
 
 
-export CFLAGS=" -O2 -g -std=gnu99"
+export CFLAGS=" -O3 -g -std=gnu99"
 
 #note: this is slightly misnamed, as this is the *source* system root.
 #for the actual sysroot that is generated for iso production, see $IMAGEDIR
@@ -39,7 +39,7 @@ export DIRS="${DIRS} kernel"
 export SYSDIRS=""
 export SYSDIRS="${SYSDIRS} boot"
 
-#the disk size in sectors. used by "qemu.sh" to make the loopback device closer
-#to reality.
-export DISKSIZE="108544"
-
+#the disk size in sectors. used by "build.sh" to make the image file.
+export DISKSIZE="131072"
+#root partition size in sectors. this is equivalent to 32M
+export ROOTSIZE="65536"

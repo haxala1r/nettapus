@@ -1,12 +1,10 @@
-#include <stdint.h>
-#include <stddef.h>
 
 
 
 
 
 #if defined(__linux__)
-#error "You ain't using a cross-compiler, adventurer. Come back when you have one."
+#error "You ain't using a cross-compiler, brave adventurer. Come back when you have one."
 #endif 
 
 #if !defined(__i686__)
@@ -15,6 +13,8 @@
 
 //stuff the compiler automatically has.
 #include <stdint.h>
+#include <stddef.h>
+
 
 
 
@@ -26,7 +26,8 @@
 #include <mem.h>
 #include <io.h>
 #include <pci.h>
-#include <ide.h>
+
+#include <disk/ide.h>
 
 void kernel_main();	//defining it here so that kernel_prep2 can call it.
 
@@ -119,7 +120,21 @@ void kernel_main() {
 	terminal_puts("Hello from the kernel! \n");
 	
 	
-	ide_print_devs();
+	
+	
+	char str[16] = {};
+	uint16_t id= ide_get_first_drive()->drive_id;
+	uint32_t* buf = kmalloc(512);
+	ide_pio_read28(id, 0, 1, (uint16_t*)buf);
+	for (size_t i = 0; i < 512/4; i++) {
+		
+		xtoa(buf[i], str);
+		terminal_puts(str);
+		terminal_putc(' ');
+	}
+	buf[512/4 - 1] = 0xAA550000;
+	ide_pio_write28(id, 0, 1, (uint16_t*)buf);
+	
 	
 	
 };
