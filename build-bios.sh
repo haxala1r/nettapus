@@ -44,8 +44,7 @@ then
 	
 	#we need to partition disk.img
 	echo "label: dos" | sfdisk disk.img
-	echo "label_id: 0x0A" | sfdisk disk.img
-	echo "2048 ${ROOTSIZE} 0x06 *" | sfdisk disk.img
+	echo "2048 ${ROOTSIZE} 0x06 -" | sfdisk disk.img
 	
 	#format root.img, and burn it to disk.img's first partition.
 	mkfs.fat -F 16 -n "NETTAPUS" root.img

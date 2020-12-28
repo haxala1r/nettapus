@@ -255,9 +255,7 @@ uint8_t init_vmm() {
 	 */
 	 
 	for (size_t i = 0; i < 1024; i++) {
-		if (i >= 1024) {
-			return 1;   //just in case something happens.
-		}
+		
 		fpage_table[i] = (page_to_addr(i)) | 0x2 | 0x1;
 		setppUsed(i, 1);	//mark the physical page as used, because... it kind of... is?
 	}

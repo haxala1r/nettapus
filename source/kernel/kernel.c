@@ -28,6 +28,7 @@
 #include <pci.h>
 
 #include <disk/ide.h>
+#include <fs/fs.h>
 
 void kernel_main();	//defining it here so that kernel_prep2 can call it.
 
@@ -51,13 +52,15 @@ void kernel_prep2(struct multiboot_header *mbh) {
 	
 	//why not add this while preparing everything. I'll probably swap this
 	//out for proper initalisation of the file systems and a proper tty.
-	init_terminal();	
 	
+	init_terminal();
 	
 	//PCI, IDE and shit
 	pci_scan_all_buses();
 	init_ide();
-	
+	if (fs_init()) {
+		terminal_puts("FS drivers could not be initialised.\n");
+	}
 	
 	
 	
@@ -119,21 +122,6 @@ void __attribute__((section(".text.kernelprep"))) kernel_prep1()  {
 void kernel_main() {
 	terminal_puts("Hello from the kernel! \n");
 	
-	
-	
-	
-	char str[16] = {};
-	uint16_t id= ide_get_first_drive()->drive_id;
-	uint32_t* buf = kmalloc(512);
-	ide_pio_read28(id, 0, 1, (uint16_t*)buf);
-	for (size_t i = 0; i < 512/4; i++) {
-		
-		xtoa(buf[i], str);
-		terminal_puts(str);
-		terminal_putc(' ');
-	}
-	buf[512/4 - 1] = 0xAA550000;
-	ide_pio_write28(id, 0, 1, (uint16_t*)buf);
 	
 	
 	

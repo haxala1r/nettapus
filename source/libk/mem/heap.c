@@ -86,7 +86,7 @@ chunk_header_t* divideChunk(uint32_t size, chunk_header_t* chunk) {
 		//12 bytes of metadata for a single fucking byte.
 		size = 16;		
 	}
-	if (size % 2 != 0) {
+	if ((size % 2) != 0) {
 		size += 1;	
 		//rounds up in case of odd numbers. I just don't want
 		//to see chunks that start at 0x12E357 y'know? it just doesn't look right.
@@ -109,7 +109,7 @@ chunk_header_t* divideChunk(uint32_t size, chunk_header_t* chunk) {
 	chunk_header_t *c2;
 	
 	
-	c2 = (chunk_header_t*)((uint32_t)chunk + size + sizeof(chunk_header_t));
+	c2 = (chunk_header_t*)(((uint32_t)chunk) + size + sizeof(chunk_header_t));
 	
 	
 	c2->size = chunk->size - (size + sizeof(chunk_header_t));
@@ -193,6 +193,9 @@ void *kmalloc(uint32_t bytes) {
 			continue;
 		} else if (chunk->size == bytes) {
 			//if the size somehow matches prefectly, just return that chunk.
+			if (chunk == hp->first_free) {
+				hp->first_free = chunk->next;	//this is a bugfix. it is essential.
+			}
 			unlink(chunk);
 			
 			//this part could probably be made to look less insane, but whatever.
@@ -213,12 +216,7 @@ void *kmalloc(uint32_t bytes) {
 				//is recognized as a proper free chunk.
 				
 				chunk_header_t* newchunk = divideChunk(bytes, chunk);	//returns the second chunk, look at the function.
-				if (chunk->prev != NULL) {
-					chunk->prev->next = newchunk;
-				}
-				if (chunk->next != NULL) {
-					chunk->next->prev = newchunk;
-				}
+				unlink(chunk);
 				
 				//UPDATE: We must also update first_free if this is the first
 				//chunk we encountered.
@@ -235,6 +233,10 @@ void *kmalloc(uint32_t bytes) {
 				
 			} else {
 				//if the difference isn't that big, just return the chunk without chopping.
+				if (chunk == hp->first_free) {
+					hp->first_free = chunk->next;	//this is a bugfix. it is essential.
+				}
+				
 				unlink(chunk);
 				
 				//again again, this part could probably be made to look less insane, but whatever.
@@ -336,8 +338,12 @@ uint8_t kfree(void *ptr) {
 //allocates more pages for heap usage. Takes argument in bytes,
 //rounded up to multiple of 4096 (0x1000) because of paging.
 uint8_t kenlargeHeap(uint32_t amount /*in bytes*/) {
-	uint32_t amount_pages = addr_to_page(amount) + 1;	//rounds up.
 	
+	//rounds up.
+	uint32_t amount_pages = addr_to_page(amount);
+	if (amount % 0x1000) {
+		amount_pages += 1;	
+	}
 	heap_t *hp = kgetHeap();
 	//if no heap is present yet, then make one by allocating literally a single page.
 	//note: type casts are generally there to shut the compiler up.
@@ -396,7 +402,9 @@ uint8_t init_heap() {
 	
 	//okay, done. Now we enlarge it using this function. kmalloc will try to enlarge
 	//the heap when necessary, so this number does not really matter.
-	kenlargeHeap(page_to_addr(50));	//page_to_addr can be used to translate pages to bytes as well.	
+	if (kenlargeHeap(page_to_addr(256 - 1))) {
+		return 1;
+	}	//page_to_addr can be used to translate pages to bytes as well.	
 	
 	//now we make the first chunk, "the wilderness" as some would say.
 	//whenever we need a chunk, we will simply chop a part of this chunk,
@@ -420,5 +428,9 @@ uint8_t init_heap() {
 	
 	return GENERIC_SUCCESS;
 }
+
+
+
+
 
 

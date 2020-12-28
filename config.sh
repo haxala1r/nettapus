@@ -40,6 +40,8 @@ export SYSDIRS=""
 export SYSDIRS="${SYSDIRS} boot"
 
 #the disk size in sectors. used by "build.sh" to make the image file.
-export DISKSIZE="131072"
-#root partition size in sectors. this is equivalent to 32M
+export DISKSIZE="524288"
+export EFISIZE="131072"
 export ROOTSIZE="65536"
+export ROOTSTART="133120"
+

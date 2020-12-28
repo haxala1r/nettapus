@@ -28,7 +28,8 @@ Some more specific and short-term "goals":
 	- Add an ATA DMA driver.
 	- Add a support for at least one filesystem.
 	
-	- Make a bootloader, instead of relying solely on GRUB to do everything.
+	- Add UEFI support. Done.
+	- Add GPT support (instead of the traditional MBR).
 
 Hopefully more "goals" and "to-dos" will appear soon.
 

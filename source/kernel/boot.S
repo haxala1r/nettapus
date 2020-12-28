@@ -1,9 +1,10 @@
 /* Declare constants for the multiboot header. */
-.set ALIGN,    1<<0             /* align loaded modules on page boundaries */
-.set MEMINFO,  1<<1             /* provide memory map */
-.set FLAGS,    ALIGN | MEMINFO  /* this is the Multiboot 'flag' field */
-.set MAGIC,    0x1BADB002       /* 'magic number' lets bootloader find the header */
-.set CHECKSUM, -(MAGIC + FLAGS) /* checksum of above, to prove we are multiboot */
+.set ALIGN,    	1<<0             /* align loaded modules on page boundaries */
+.set MEMINFO,  	1<<1             /* provide memory map */
+.set VIDEOINFO, 1<<2				/* Provide video mode info, and also do some more stuff. */
+.set FLAGS,    	VIDEOINFO | ALIGN | MEMINFO  /* this is the Multiboot 'flag' field */
+.set MAGIC,    	0x1BADB002       /* 'magic number' lets bootloader find the header */
+.set CHECKSUM, 	-(MAGIC + FLAGS) /* checksum of above, to prove we are multiboot */
  
 /* 
 Declare a multiboot header that marks the program as a kernel. These are magic
@@ -17,6 +18,13 @@ forced to be within the first 8 KiB of the kernel file.
 .long MAGIC
 .long FLAGS
 .long CHECKSUM
+.skip 24	//other fiels are not necessary.
+.long 0		//boot us in linear graphics-mode.
+.long 0 	//width: no preference.
+.long 0 	//height: no preference.
+.long 0		//depth: no preference.
+
+
  
 //this is a small stack, and it's for kernel usage.
 .section .text.kernelprep
@@ -30,7 +38,7 @@ stack_top:
 
 	
 mbd:
-.skip 4
+.skip 8
 
 	
 .section .text.kernelprep
