@@ -19,6 +19,7 @@ First of all, I'm currently trying my best to ensure that this OS will run both 
 My current goal is to make sure that this OS is actually usable after I'm done with it. 
 
 
+
 # To-Dos and Dones
 Here are some things that I have yet to do, and things I have actually done so far.
 
@@ -26,8 +27,7 @@ Here are some things that I have yet to do, and things I have actually done so f
 	- Set up paging. Done.
 	- Add a proper memory manager, as well as a heap. Done.
 	- Set up interrupts.
-	- Set up threading, multitasking, IPC and related things.
-	
+	- Set up threading, multitasking, IPC and related things.	
 	- Add PCI support. Done.
 	- Add PCIe support. 
 	- Add an ATA PIO driver. Done.
