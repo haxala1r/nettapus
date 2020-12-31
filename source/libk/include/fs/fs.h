@@ -35,6 +35,24 @@ struct file_system {
 typedef struct file_system file_system_t;
 
 
+uint8_t fs_read_sectors(file_system_t*, uint32_t, uint8_t, void*);
+uint8_t fs_write_sectors(file_system_t*, uint32_t, uint8_t, void*);
+
+uint8_t fs_read_bytes(file_system_t*, void*, uint32_t, uint16_t, uint32_t);
+uint8_t fs_write_bytes(file_system_t*, void*, uint32_t, uint16_t, uint32_t);
+
+
+
+
+uint8_t fs_list_dirs(file_system_t, char*);
+
+uint8_t fs_read_file(file_system_t, char*, void*, uint32_t, uint32_t);
+uint8_t fs_write_file(file_system_t, char*, void*, uint32_t, uint32_t);
+
+
+
+
+uint8_t fs_parse_mbr(uint16_t);
 file_system_t* fs_get_root();
 uint8_t fs_init();
 

@@ -3,6 +3,8 @@
 #include <disk/ide.h>
 #include <pci.h>
 #include <mem.h>
+#include <tty.h>
+
 
 ide_drive_t* ide_first_drive;
 ide_bus_t* ide_first_bus;
@@ -46,7 +48,7 @@ uint8_t ide_pio_poll(uint16_t port) {
 			return 1;	//an error bit is set.
 		}
 		
-		if (((stat & 0x80) == 0) || (stat & 8)) {
+		if (((stat & 0x80) == 0) && (stat & 8)) {
 			//BSY clear and DRQ is set -- data is ready.
 			return 0;
 		}
@@ -91,12 +93,14 @@ uint8_t ide_pio_read28(uint16_t drive_id, uint32_t starting_lba, uint8_t sector_
 	outb(drive->io_port_base + 4, (uint8_t)(starting_lba >> 8) & 0xFF);
 	
 	//and the next eight bits.
-	outb(drive->io_port_base + 4, (uint8_t)(starting_lba >> 16) & 0xFF);
+	outb(drive->io_port_base + 5, (uint8_t)(starting_lba >> 16) & 0xFF);
 	
 	//now the command
 	outb(drive->io_port_base + 7, 0x20);
 	
-	
+	while (!(inb(drive->io_port_base + 7) | 0x40)) {
+		;
+	}
 	
 	for (uint16_t i = 0; i < count_w; i++) {
 		
@@ -161,7 +165,7 @@ uint8_t ide_pio_write28(uint16_t drive_id, uint32_t starting_lba, uint8_t sector
 	outb(drive->io_port_base + 4, (uint8_t)(starting_lba >> 8) & 0xFF);
 	
 	//and the next eight bits.
-	outb(drive->io_port_base + 4, (uint8_t)(starting_lba >> 16) & 0xFF);
+	outb(drive->io_port_base + 5, (uint8_t)(starting_lba >> 16) & 0xFF);
 	
 	//now the command
 	outb(drive->io_port_base + 7, 0x30);
@@ -452,7 +456,7 @@ void ide_register_bus(pci_device_t* bus) {
 };
 
 
-void init_ide() {
+uint8_t init_ide() {
 	//first, we're going to loop through all the pci devices to find a 
 	//IDE controller. if we can't find one, we're kinda screwed.
 	//because y'know, this is mainly a ATA PIO driver.
@@ -473,7 +477,17 @@ void init_ide() {
 		}
 		i = i->next;
 	}
+	
 	ide_refresh_disks();
+	
+	//check if everything went as smoothly as they are supposed to.
+	if (ide_get_first_bus() == NULL) {
+		return 1;
+	}
+	if (ide_get_first_drive() == NULL) {
+		return 2;
+	}
+	return 0;
 };
 
 

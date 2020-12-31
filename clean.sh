@@ -6,13 +6,13 @@
 . ./config.sh
 
 for DIR in ${DIRS}; do
-	cd "${SYSROOT}/${DIR}"
+	cd "${SOURCEDIR}/${DIR}"
 	./clean.sh
 done;
 
 cd "${SYSROOT}/.."
 
-rm -rf image/
+
 rm disk.img
 
 

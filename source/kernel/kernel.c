@@ -29,7 +29,7 @@
 
 #include <disk/ide.h>
 #include <fs/fs.h>
-
+#include <fs/ustar.h>
 void kernel_main();	//defining it here so that kernel_prep2 can call it.
 
 
@@ -40,6 +40,8 @@ void kernel_prep2(struct multiboot_header *mbh) {
 	//init_memory starts everything memory-management related.
 	//namely; PMM, VMM and the heap. This is done first because a lot of
 	//things depend on it.
+	
+	
 	if (init_memory(mbh)){
 		init_terminal();
 		terminal_puts("Memory initialisation failed.\n");
@@ -47,19 +49,73 @@ void kernel_prep2(struct multiboot_header *mbh) {
 			asm("hlt;");
 		}
 	}
+
 	
-	
-	
-	//why not add this while preparing everything. I'll probably swap this
-	//out for proper initalisation of the file systems and a proper tty.
-	
+	/* now we initialise literally everything.
+	 * This part simply calls the initialisation function of every part of the OS.
+	 * I might want to replace this with a more... systematic approach.
+	 * because currently replacing a driver with another one is kind of problematic.
+	 * IDEA:
+	 *		I can try to do modules. After the disk I/O and filesystem drivers are in place, we really
+	 * 		have no reason to try and tuck every single driver into the kernel.
+	 * 		This would let us get creative with some specific parts of the drivers
+	 * 		and, more importantly, allow us to test the OS without having to re-compile
+	 * 		the kernel everytime. It's going to be a bit hard to implement that though,
+	 * 		so it's probably going to be done much later into development.
+	 * 		
+	 * 		Since I already have a way of knowing at which address exactly the kernel ends,
+	 * 		this could be relatively simple, after I add support for at least a single
+	 * 		file format.
+	 * 
+	 */
 	init_terminal();
 	
-	//PCI, IDE and shit
-	pci_scan_all_buses();
-	init_ide();
-	if (fs_init()) {
-		terminal_puts("FS drivers could not be initialised.\n");
+	uint8_t status = 0;	//this will be used to store the status for initialisation functions.
+	
+	
+	//PCI.
+	status = pci_scan_all_buses(); 
+	if (status) {
+		terminal_puts("[FATAL] PCI couldn't initalise properly. Halting process.\n");
+		while (1) {
+			asm("hlt;");
+		}
+	} else {
+		terminal_puts("[OK] PCI initalised correctly.\n");
+	}
+	
+	
+	//IDE
+	status = init_ide();
+	if (status == 1) {
+		terminal_puts("[FATAL] Could not find any ATA PIO compatible buses. Halting process.\n");
+		while (1) {
+			asm("hlt;");
+		}
+	} else if (status == 2) {	
+		terminal_puts("[FATAL] Could not find any ATA PIO compatible drives. Halting process.\n");
+		while (1) {
+			asm("hlt;");
+		}
+	} else {
+		terminal_puts("[OK] IDE drivers initalised correctly.\n");
+	}
+	
+	
+	//FS
+	status = fs_init();
+	if (status == 0xFF) {
+		terminal_puts("[FATAL] FS drivers initialised correctly, but no supported FS was found. Halting process.\n");
+		while (1) {
+			asm("hlt;");
+		}
+	} else if (status) {
+		terminal_puts("[FATAL] FS drivers could not be initialised.\n");
+		while (1) {
+			asm("hlt;");
+		}
+	} else {
+		terminal_puts("[OK] FS drivers initialised correctly.\n");
 	}
 	
 	
@@ -120,11 +176,20 @@ void __attribute__((section(".text.kernelprep"))) kernel_prep1()  {
 
 
 void kernel_main() {
-	terminal_puts("Hello from the kernel! \n");
+	terminal_puts("Welcome to Nettapus!\n");
 	
 	
+	//This is some test code to read a file called "hello" and print its contents.
+	file_system_t* root = fs_get_root();
 	
+	char* buf = kmalloc(512);	//a whole sector cuz why not.
+	memset(buf, 0, 512);
 	
+	if (ustar_read_file(root, "hello", (void*)buf, 0, 0x60)) {
+		terminal_puts("Error!\n");
+		return;
+	}
+	terminal_puts(buf);
 };
 
 

@@ -54,7 +54,7 @@ ide_drive_t* ide_get_first_drive();
 ide_bus_t* ide_get_first_bus();
 uint8_t ide_identify_noid(uint16_t io_base, uint8_t slave, uint16_t* buf);
 
-void init_ide();
+uint8_t init_ide();
 
 
 #ifdef __cplusplus

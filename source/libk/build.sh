@@ -5,15 +5,15 @@ LIBS="vga tty mem string pci disk fs"
 OBJS=""
 
 for LIB in ${LIBS}; do
-	cd "${SYSROOT}${LIBK}/${LIB}"
+	cd "${SOURCEDIR}${LIBK}/${LIB}"
 	for F in $(ls *.c); do
-		${CC} -c "${F}" -o "${F}.o" ${CFLAGS} -ffreestanding -nostdlib --sysroot="${SYSROOT}" -isystem="/libk/include"
+		${CC} -c "${F}" -o "${F}.o" ${CFLAGS} -ffreestanding -nostdlib --sysroot="${SOURCEDIR}" -isystem="/libk/include"
 		OBJS="${OBJS} ${PWD}/${F}.o"
 	done;
 
 done
 
-cd "${SYSROOT}${LIBK}"
+cd "${SOURCEDIR}${LIBK}"
 
 ${AR} rcs libk.a ${OBJS}
 

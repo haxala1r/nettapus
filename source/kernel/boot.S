@@ -1,7 +1,7 @@
 /* Declare constants for the multiboot header. */
 .set ALIGN,    	1<<0             /* align loaded modules on page boundaries */
 .set MEMINFO,  	1<<1             /* provide memory map */
-.set VIDEOINFO, 1<<2				/* Provide video mode info, and also do some more stuff. */
+.set VIDEOINFO, 0<<2				/* Provide video mode info, and also do some more stuff. */
 .set FLAGS,    	VIDEOINFO | ALIGN | MEMINFO  /* this is the Multiboot 'flag' field */
 .set MAGIC,    	0x1BADB002       /* 'magic number' lets bootloader find the header */
 .set CHECKSUM, 	-(MAGIC + FLAGS) /* checksum of above, to prove we are multiboot */
@@ -19,10 +19,10 @@ forced to be within the first 8 KiB of the kernel file.
 .long FLAGS
 .long CHECKSUM
 .skip 24	//other fiels are not necessary.
-.long 0		//boot us in linear graphics-mode.
-.long 0 	//width: no preference.
-.long 0 	//height: no preference.
-.long 0		//depth: no preference.
+.long 0		//boot us in text mode. TODO: add a proper VGA driver, and then switch this to graphic-mode.
+.long 0 	/*1024 	*/
+.long 0		/*768	*/ 	
+.long 0		/*32	*/
 
 
  
@@ -52,6 +52,9 @@ _start:
 	
 	cli
 	
+	/* this OS must be loaded with a multiboot-compliant bootloader. */
+	//cmp $0x2BADB002, %eax
+	//jne halt
 
 
 	mov $stack_top, %esp
@@ -89,8 +92,8 @@ _start:
 	
 	
 	cli
-1:	hlt
-	jmp 1b
+halt:	hlt
+		jmp halt
  
 /*
 Set the size of the _start symbol to the current location '.' minus its start.

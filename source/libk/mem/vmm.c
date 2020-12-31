@@ -91,7 +91,7 @@ uint8_t mapPage(uint32_t pp, uint32_t vp, page_directory_t *pd) {
 	
 	uint32_t entry = ((uint32_t*)(pd->dir[table_num] & 0xFFFFF000))[table_entry];
 	entry = entry & 0xFFF;	//only the first 12 bits will be preserved, as they are flags. other bits might hold trash data.
-	entry = entry | (page_to_addr(pp)) | 0b1;	//add the address to the entry, and mark it as present.
+	entry = entry | (page_to_addr(pp)) | 0b11;	//add the address to the entry, and mark it as present.
 	
 	
 	((uint32_t*)(pd->dir[table_num] & 0xFFFFF000))[table_entry] = entry;	//write the entry to the table.

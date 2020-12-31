@@ -1,3 +1,5 @@
+Happy new year, everybody!
+
 # nettapus
 A beginner's OS project. Made to learn about OS development. 
 As of now, it does not contain anything of interest or use. 
@@ -15,7 +17,10 @@ You also need to have grub and xorriso packages.installed, since the build scrip
 # Goals
 First of all, I'm currently trying my best to ensure that this OS will run both on QEMU and real hardware. 
 My current goal is to make sure that this OS is actually usable after I'm done with it. 
-Some more specific and short-term "goals":
+
+
+# To-Dos and Dones
+Here are some things that I have yet to do, and things I have actually done so far.
 
 	- Switch to higher half. Done.
 	- Set up paging. Done.
@@ -24,14 +29,18 @@ Some more specific and short-term "goals":
 	- Set up threading, multitasking, IPC and related things.
 	
 	- Add PCI support. Done.
+	- Add PCIe support. 
 	- Add an ATA PIO driver. Done.
 	- Add an ATA DMA driver.
-	- Add a support for at least one filesystem.
+	- Add an SATA/AHCI driver.
+	- Add USB support.
+	- Add keyboard support.
+	- Add support for at least one filesystem. Done -- Tar.
+	- Add support for another file system, because Tar doesn't count.
 	
-	- Add UEFI support. Done.
+	- Add UEFI support. I have experimented this -- this will only be done after proper VGA support is made.
+	- Add proper VGA support.
 	- Add GPT support (instead of the traditional MBR).
-
-Hopefully more "goals" and "to-dos" will appear soon.
 
 # Contributions
 Yeah, this project's still pretty immature as of now. 
@@ -44,5 +53,4 @@ coding style as I do, which mainly consists of:
 	- Divide stuff into different functions whenever possible.
 	- Ignore all of the above and write shitty code like you're gonna die tomorrow.
 	
-
 

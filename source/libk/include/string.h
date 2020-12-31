@@ -20,7 +20,7 @@ int32_t atox(const char*);
 
 char xbtoa(uint8_t);
 void xtoa(uint32_t, char*);
-
+uint32_t oct2bin(char*, uint32_t);
 
 #ifdef __cplusplus
 }

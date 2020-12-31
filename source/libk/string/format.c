@@ -14,7 +14,7 @@ char xbtoa(uint8_t val) {
 	return 0;
 }
 //hex to ascii
-void xtoa(uint32_t val, char *buf) {
+void xtoa(uint32_t val, char* buf) {
 	buf[0] = '0';
 	buf[1] = 'x';
 	for (uint8_t i = 0; i < 8; i++) {
@@ -23,5 +23,28 @@ void xtoa(uint32_t val, char *buf) {
 	}
 	
 }
+
+
+
+
+
+
+uint32_t oct2bin(char* buf, uint32_t size) {
+	uint32_t val = 0;
+	
+	
+	while (size-- > 0) {
+		val *= 8;
+		val += *(buf++) - '0';
+	}
+	return val;
+};
+
+
+
+
+
+
+
 
 
