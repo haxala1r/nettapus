@@ -62,6 +62,7 @@ uint32_t findvp(page_directory_t* pd) {
 			return (i * 1024 + j);
 		}
 	}
+	return 0xFFFFFFFF;	//invalid value for a page.
 }
 
 
@@ -228,7 +229,7 @@ uint32_t kpumap(uint32_t page_num) {
 
 //uint32_t kernel_end = 0x123;
 uint8_t init_vmm() {
-	memory_map_t *pm = getPhysicalMem();
+
 	initPageDir(&kernel_page_dir);	//initialise the page directory for the kernel
 	
 	//this one is something that worries me: I have absolutely no clue why,

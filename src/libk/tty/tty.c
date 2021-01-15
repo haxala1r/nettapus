@@ -47,7 +47,7 @@ void terminal_printscreen(uint16_t *entries) {
 
 
 
-void putentry_at(uint8_t c, uint8_t color, size_t x, size_t y) {
+void putentry_at(char c, uint8_t color, size_t x, size_t y) {
 	if (!(x < VGA_WIDTH) || !(y < VGA_HEIGHT)) {
 		return;
 	}
@@ -69,7 +69,7 @@ void terminal_scroll() {
 	terminal.row--;
 }
 
-void terminal_putc(uint8_t c) {
+void terminal_putc(char c) {
 	if (c == '\n') {
 		terminal.column = 0;
 		if (++terminal.row >= VGA_HEIGHT) {
@@ -87,7 +87,7 @@ void terminal_putc(uint8_t c) {
 	
 }
 
-void terminal_put(uint8_t *data, size_t size) {
+void terminal_put(char *data, size_t size) {
 	for (size_t i = 0; i < size; i++) {
 		terminal_putc(data[i]);
 	}

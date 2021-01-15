@@ -5,6 +5,9 @@
 #include <mem.h>
 #include <fs/ustar.h>
 
+
+
+
 file_system_t* root_fs;	//the first filesystem in the list will be our root.
 
 file_system_t* fs_get_root() {
@@ -15,7 +18,7 @@ file_system_t* fs_get_root() {
 //These functions, in particular, are only made as a convenient "abstraction" to be able to
 //read stuff off the disk easily, without swapping 15 variables and 33 functions around.
 
-uint8_t fs_read_sectors(file_system_t* fs, uint32_t lba, uint8_t sector_count, void* buf) {
+uint8_t fs_read_sectors(file_system_t* fs, uint32_t lba, uint32_t sector_count, void* buf) {
 	if ((lba + sector_count) > (fs->sector_count)) {
 		return 1;
 	}
@@ -28,7 +31,7 @@ uint8_t fs_read_sectors(file_system_t* fs, uint32_t lba, uint8_t sector_count, v
 	//now we need to perform the disk access.
 	if (sector_count < 256) {
 		//no need to break down the amount of sectors to read.
-		if (ide_pio_read28(fs->drive_id, fs->starting_sector + lba, sector_count, (uint16_t*)buf)) {
+		if (ide_pio_read28(fs->drive_id, fs->starting_sector + lba, (uint8_t)sector_count, (uint16_t*)buf)) {
 			return 1;		//an error occured.
 		}
 		
@@ -43,7 +46,7 @@ uint8_t fs_read_sectors(file_system_t* fs, uint32_t lba, uint8_t sector_count, v
 				i = sector_count;
 			}
 			
-			if (ide_pio_read28(fs->drive_id, fs->starting_sector + lba, i, (uint16_t*)i_buf)) {
+			if (ide_pio_read28(fs->drive_id, fs->starting_sector + lba, (uint8_t)i, (uint16_t*)i_buf)) {
 				return 1;		//an error occured.
 			}
 			
@@ -52,12 +55,12 @@ uint8_t fs_read_sectors(file_system_t* fs, uint32_t lba, uint8_t sector_count, v
 			i_buf += i * 512;
 		}
 	}
-
+	
 	return 0;
 };
 
 
-uint8_t fs_write_sectors(file_system_t* fs, uint32_t lba, uint8_t sector_count, void* buf) {
+uint8_t fs_write_sectors(file_system_t* fs, uint32_t lba, uint32_t sector_count, void* buf) {
 	if ((lba + sector_count) > (fs->sector_count)) {
 		return 1;
 	}
@@ -70,14 +73,16 @@ uint8_t fs_write_sectors(file_system_t* fs, uint32_t lba, uint8_t sector_count, 
 	//now we need to perform the disk access.
 	if (sector_count < 256) {
 		//no need to break down the amount of sectors to read.
-		if (ide_pio_write28(fs->drive_id, fs->starting_sector + lba, sector_count, (uint16_t*)buf)) {
+		if (ide_pio_write28(fs->drive_id, fs->starting_sector + lba, (uint8_t)sector_count, (uint16_t*)buf)) {
 			return 1;		//an error occured.
 		}
 		
 		
 	} else  {
-		//we need to do it in multiple stages.
+		//we need to do it in multiple batches.
 		
+		//this is the maximum amount of sectors we can access at a time. The loop below
+		//will 
 		size_t i = 255;
 		uint8_t* i_buf = (uint8_t*)buf;	//iterator pointer to be able to read conveniently without losing our pointer.
 		while (sector_count) {
@@ -85,13 +90,13 @@ uint8_t fs_write_sectors(file_system_t* fs, uint32_t lba, uint8_t sector_count, 
 				i = sector_count;
 			}
 			
-			if (ide_pio_write28(fs->drive_id, fs->starting_sector + lba, i, (uint16_t*)i_buf)) {
+			if (ide_pio_write28(fs->drive_id, fs->starting_sector + lba, (uint8_t)i, (uint16_t*)i_buf)) {
 				return 1;		//an error occured.
 			}
 			
 			sector_count -= i;
-			lba += i;
-			i_buf += i * 512;
+			lba += i;			
+			i_buf += i * 512;	//this is the reason we declared i_buf.
 		}
 	}
 	
@@ -114,6 +119,8 @@ uint8_t fs_read_bytes(file_system_t* fs, void* buf, uint32_t sector, uint16_t of
 	offset %= 512;
 	
 	//how many sectors in total we need to read from the disk.
+	//The formula is a bit arcane, I apologize for that.
+	//What? you're still upset? Too bad!
 	uint32_t sector_count = (bytes / 512) + ((bytes % 512) + 511)/512 + 1;
 	
 	
@@ -231,40 +238,19 @@ uint8_t fs_write_bytes(file_system_t* fs, void* buf, uint32_t sector, uint16_t o
 	
 	
 	
-	//this is for the IDE driver.
-	if (sector_count == 256) {
-		sector_count = 0;
+	
+
+	if (fs_write_sectors(fs, sector, sector_count, temp_buf)) {
+		kfree(temp_buf);
+		return 1;	//an error.
 	}
 	
-	if (sector_count < 256) {
-		if (fs_write_sectors(fs, sector, sector_count, temp_buf)) {
-			kfree(temp_buf);
-			return 1;	//an error.
-		}
-	} else {
-		//it is bigger than 256 sectors, thus needs to be done in multiple calls to
-		//fs_write_sectors.
-		size_t i = 255;
-		uint8_t* i_buf = temp_buf;	//iterator pointer to be able to read conveniently without losing our pointer.
-		while (sector_count) {
-			if (sector_count < 255) {
-				i = sector_count;
-			}
-			
-			if (fs_write_sectors(fs, sector, i, i_buf)) {
-				kfree(temp_buf);
-				return 1;		//an error occured.
-			}
-			
-			sector_count -= i;
-			i_buf += i * 512;
-		}
-	}
 	
 	//we should be done if we reach here.
 	kfree(temp_buf);
 	return 0;
 }
+
 
 
 

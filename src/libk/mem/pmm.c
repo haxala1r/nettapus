@@ -101,6 +101,7 @@ uint32_t allocpp() {
 		
 		
 	}
+	return 0xFFFFFFFF;	//invalid page value.
 }
 
 

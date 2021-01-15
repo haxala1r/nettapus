@@ -1,7 +1,9 @@
 
 
 
-
+//#ifdef __STDC_HOSTED__
+//#error "O ho ho, brave adventurer. Surely, you jest when you try to compile a FUCKING KERNEL FOR A HOSTED ENVIRONMENT."
+//#endif
 
 #if defined(__linux__)
 #error "You ain't using a cross-compiler, brave adventurer. Come back when you have one."
@@ -76,19 +78,24 @@ void kernel_prep2(struct multiboot_header *mbh) {
 	//PCI.
 	status = pci_scan_all_buses(); 
 	if (status) {
-		terminal_puts("[FATAL] PCI couldn't initalise properly. Halting process.\n");
+		terminal_puts("PCI initialisation failed. I'm afraid this is going to be troublesome, young hero.\n");
 		while (1) {
 			asm("hlt;");
 		}
 	} else {
-		terminal_puts("[OK] PCI initalised correctly.\n");
+		terminal_puts("PCI OK.\n");
 	}
 	
 	
 	//IDE
+	//NOTE: after support for an internet card, USB and similar stuff, the IDE driver
+	//failing to initialise or not finding a drive isn't fatal. so the "hlt" should be removed
+	//after proper support for those things are provided.
+	//Same with the file system, though to a lesser extent, since modules and user-space 
+	//services are also pretty important.
 	status = init_ide();
 	if (status == 1) {
-		terminal_puts("[FATAL] Could not find any ATA PIO compatible buses. Halting process.\n");
+		terminal_puts("I'm afraid this machine does not contain an ATA PIO compatible drive, young hero.\n");
 		while (1) {
 			asm("hlt;");
 		}
@@ -175,21 +182,36 @@ void __attribute__((section(".text.kernelprep"))) kernel_prep1()  {
 
 
 
-void kernel_main() {
+void kernel_main(void) {
 	terminal_puts("Welcome to Nettapus!\n");
 	
-	
-	//This is some test code to read a file called "hello" and print its contents.
-	file_system_t* root = fs_get_root();
-	
-	char* buf = kmalloc(512);	//a whole sector cuz why not.
-	memset(buf, 0, 512);
-	
-	if (ustar_read_file(root, "hello", (void*)buf, 0, 0x60)) {
-		terminal_puts("Error!\n");
+	char* buf = kmalloc(1024);
+	memset(buf, 0, 1024);
+	if (buf == NULL) {
+		terminal_puts("EROR.");
 		return;
 	}
+	
+	int32_t fd = kopen("hello", 0);
+	if (fd == -1) {
+		terminal_puts("A negative fd. \n");
+		return;
+	}
+	
+	kread(fd, buf, 17);
+	
 	terminal_puts(buf);
+	
+	kclose(fd);
+	fd = kopen("hello", 1);
+	
+	memset(buf + 17, '$', 1024 - 18);
+	if (kwrite(fd, buf, 1024) != 1024) {
+		terminal_puts("It seems to me like an error occured, ma boi.\n");
+	}
+	
+	
+	
 };
 
 

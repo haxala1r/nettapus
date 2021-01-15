@@ -3,7 +3,7 @@
 echo "[/kernel/build.sh] building kernel..."
 
 #the compiler and the linker we will use.
-CCtemp="${CC} -ffreestanding -Wall -Wextra ${CFLAGS}"
+CCtemp="${CC} -ffreestanding ${CFLAGS}"
 KLINKER="${CC} -ffreestanding -lgcc -O3 -nostdlib"
 
 #compile the kernel.

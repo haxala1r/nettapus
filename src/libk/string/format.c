@@ -35,7 +35,7 @@ uint32_t oct2bin(char* buf, uint32_t size) {
 	
 	while (size-- > 0) {
 		val *= 8;
-		val += *(buf++) - '0';
+		val += *((uint8_t*)buf++) - '0';
 	}
 	return val;
 };
@@ -43,7 +43,15 @@ uint32_t oct2bin(char* buf, uint32_t size) {
 
 
 
-
+int32_t bin2oct(uint32_t val, char* buf, uint32_t size) {
+	//turns a number to a valid octal string. Used for TAR.
+	while (size-- > 0) {
+		uint32_t dig = val % 8;
+		val /= 8;
+		*(buf + size) = (char)(dig + '0');
+	};
+	return 0;
+};
 
 
 

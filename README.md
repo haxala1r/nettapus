@@ -23,24 +23,41 @@ My current goal is to make sure that this OS is actually usable after I'm done w
 # To-Dos and Dones
 Here are some things that I have yet to do, and things I have actually done so far.
 
-	- Switch to higher half. Done.
-	- Set up paging. Done.
-	- Add a proper memory manager, as well as a heap. Done.
+	
+	
 	- Set up interrupts.
 	- Set up threading, multitasking, IPC and related things.	
-	- Add PCI support. Done.
+	
 	- Add PCIe support. 
-	- Add an ATA PIO driver. Done.
+	
+	- Add proper disk abstraction.
+	- Add module loading.
+	
 	- Add an ATA DMA driver.
 	- Add an SATA/AHCI driver.
 	- Add USB support.
 	- Add keyboard support.
-	- Add support for at least one filesystem. Done -- Tar.
-	- Add support for another file system, because Tar doesn't count.
 	
-	- Add UEFI support. I have experimented this -- this will only be done after proper VGA support is made.
+	
+	- Add support for another file system, because Tar doesn't count.
+	- Refactor a huge chunk of the VFS, because it is currently just a huge chunk of hacky mess.
+	
+	- Add UEFI support. I have experimented with this and it works -- but it will only be done after proper VGA support is made.
 	- Add proper VGA support.
 	- Add GPT support (instead of the traditional MBR).
+
+#Dones
+Here are some things from the above list I've completed (and moved here).
+	
+	- Switch to higher half.
+	- Set up paging.
+	- Add a proper memory manager, as well as a heap. 
+	- Add support for at least one filesystem. (TAR)
+	
+	- Add PCI support. 
+	- Add an ATA PIO driver. 
+	
+	- Add proper file abstraction.
 
 # Contributions
 Yeah, this project's still pretty immature as of now. 

@@ -3,6 +3,7 @@
 //for Virtual Memory Management (TM) and Physical Memory Management (TM) look at the other files in the same directory.
 
 #include <mem.h>
+#include <tty.h>
 
 //note that when it comes to the heap, we generally don't want stuff to be
 //ID mapped (at least its not a requirement). So we're generally just relying on
@@ -249,7 +250,6 @@ void *kmalloc(uint32_t bytes) {
 	}
 	//if it reaches here, we must have gone through the entire heap, 
 	//and there was no matching chunks. return NULL in this case.
-	
 	return NULL;
 }
 
@@ -374,7 +374,7 @@ uint8_t kenlargeHeap(uint32_t amount /*in bytes*/) {
 	return GENERIC_SUCCESS;
 }
 
-uint8_t init_heap() {
+uint8_t init_heap(void) {
 	//this should be called before anything else, mostly because it initialises
 	//important variables and as such, should be called in any custom "init"
 	//functions you can make. the original "init_memory" already calls this,
@@ -429,6 +429,44 @@ uint8_t init_heap() {
 	return GENERIC_SUCCESS;
 }
 
+
+
+
+
+
+#ifdef DEBUG
+
+#include <tty.h>
+#include <string.h>
+
+void heap_print_state(void) {
+	heap_t* hp = kgetHeap();
+	
+	char str[16] = {};
+	chunk_header_t* i = hp->first_free;
+	
+	terminal_puts("\nHEAP STATE:\n");
+	terminal_puts("{address}   {size}\n");
+	
+	while (i) {
+		
+		xtoa((uint32_t)i, str);
+		terminal_puts(str);
+		terminal_puts("   ");
+		
+		xtoa(i->size, str);
+		terminal_puts(str);
+		terminal_putc('\n');
+		
+		
+		
+		
+		i = i->next;
+	}
+	
+};
+
+#endif
 
 
 

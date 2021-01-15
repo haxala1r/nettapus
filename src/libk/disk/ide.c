@@ -81,7 +81,7 @@ uint8_t ide_pio_read28(uint16_t drive_id, uint32_t starting_lba, uint8_t sector_
 	
 	
 	//Drive, OR'ed with highest 4 bits of starting_lba
-	outb(drive->io_port_base + 6, 0xE0 | (drive->slave << 4) | ((starting_lba >> 24) & 0x0F) );
+	outb(drive->io_port_base + 6, (uint8_t)(0xE0 | (drive->slave << 4) | ((starting_lba >> 24) & 0x0F)) );
 	
 	//sectorcount
 	outb(drive->io_port_base + 2, sector_count);
@@ -153,7 +153,7 @@ uint8_t ide_pio_write28(uint16_t drive_id, uint32_t starting_lba, uint8_t sector
 	
 	
 	//Drive, OR'ed with highest 4 bits of starting_lba
-	outb(drive->io_port_base + 6, 0xE0 | (drive->slave << 4) | ((starting_lba >> 24) & 0x0F) );
+	outb(drive->io_port_base + 6, (uint8_t)(0xE0 | (drive->slave << 4) | ((starting_lba >> 24) & 0x0F)) );
 	
 	//sectorcount
 	outb(drive->io_port_base + 2, sector_count);

@@ -2,8 +2,7 @@
 #include <string.h> 
 
 
-
-size_t memcmp(const void *aptr, const void *bptr, size_t size) {
+int32_t memcmp(const void *aptr, const void *bptr, size_t size) {
 	const uint8_t *a = (const uint8_t *) aptr;
 	const uint8_t *b = (const uint8_t *) bptr;
 	

@@ -13,11 +13,13 @@ export LD="${TARGET}-ld"
 
 
 
-export CFLAGS=" -O3 -g -std=gnu99"
+export CFLAGS=" -O3 -g -std=gnu99 -Wall -Wextra"
+#uncomment this while debugging.
+#CFLAGS="${CFLAGS} -DDEBUG"
 
 
 export SYSROOT="${PWD}/root"
-export SOURCEDIR="${PWD}/source"
+export SOURCEDIR="${PWD}/src"
 
 #directories of stuff to build
 export KERNELDIR="/kernel"

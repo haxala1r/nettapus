@@ -149,7 +149,7 @@ uint32_t kpmap();	//maps a random physical page to a random virtual page, and re
 uint32_t kpumap(uint32_t);	//unmaps a page from the kernel page directory.
 
 
-//Heap (TM) management. (it's kinda trash, but it works okay i guess?)
+//Heap (TM) management. (it's kinda trash, but it works okay i guess? though that could be said about everything I write.)
 uint8_t unlink(chunk_header_t*);	//unlinks a chunk from the linked list
 uint8_t link(chunk_header_t*, chunk_header_t*);	//links two chunks to each other.
 void* kmalloc(uint32_t);
@@ -165,6 +165,14 @@ uint8_t init_heap();							//Heap			  Manager (TM)
 //initialises everything (a.k.a. calls the three functions declared above.)
 uint8_t init_memory(struct multiboot_header*);	
 
+
+
+
+#ifdef DEBUG
+
+void heap_print_state();
+
+#endif
 
 
 
