@@ -78,7 +78,7 @@ void kernel_prep2(struct multiboot_header *mbh) {
 	//PCI.
 	status = pci_scan_all_buses(); 
 	if (status) {
-		terminal_puts("PCI initialisation failed. I'm afraid this is going to be troublesome, young hero.\n");
+		terminal_puts("PCI not ok.\n");
 		while (1) {
 			asm("hlt;");
 		}
@@ -90,39 +90,40 @@ void kernel_prep2(struct multiboot_header *mbh) {
 	//IDE
 	//NOTE: after support for an internet card, USB and similar stuff, the IDE driver
 	//failing to initialise or not finding a drive isn't fatal. so the "hlt" should be removed
-	//after proper support for those things are provided.
-	//Same with the file system, though to a lesser extent, since modules and user-space 
-	//services are also pretty important.
+	//after proper support for those things are provided. Even though modules and user-space 
+	//services are also pretty important, they aren't strictly *necessary* and can be downloaded
+	//anyway.
+	//Same with the file system. 
 	status = init_ide();
 	if (status == 1) {
-		terminal_puts("I'm afraid this machine does not contain an ATA PIO compatible drive, young hero.\n");
+		terminal_puts("No ATAPI compatible buses found.\n");
 		while (1) {
 			asm("hlt;");
 		}
 	} else if (status == 2) {	
-		terminal_puts("[FATAL] Could not find any ATA PIO compatible drives. Halting process.\n");
+		terminal_puts("No ATAPI compatible drives found.\n");
 		while (1) {
 			asm("hlt;");
 		}
 	} else {
-		terminal_puts("[OK] IDE drivers initalised correctly.\n");
+		terminal_puts("IDE OK.\n");
 	}
 	
 	
 	//FS
 	status = fs_init();
 	if (status == 0xFF) {
-		terminal_puts("[FATAL] FS drivers initialised correctly, but no supported FS was found. Halting process.\n");
+		terminal_puts("FS driver initialised correctly, but no supported FS was found.\n");
 		while (1) {
 			asm("hlt;");
 		}
 	} else if (status) {
-		terminal_puts("[FATAL] FS drivers could not be initialised.\n");
+		terminal_puts("FS driver not ok.\n");
 		while (1) {
 			asm("hlt;");
 		}
 	} else {
-		terminal_puts("[OK] FS drivers initialised correctly.\n");
+		terminal_puts("FS OK.\n");
 	}
 	
 	
@@ -185,30 +186,20 @@ void __attribute__((section(".text.kernelprep"))) kernel_prep1()  {
 void kernel_main(void) {
 	terminal_puts("Welcome to Nettapus!\n");
 	
-	char* buf = kmalloc(1024);
-	memset(buf, 0, 1024);
-	if (buf == NULL) {
-		terminal_puts("EROR.");
-		return;
-	}
+	//Some place holder code to keep here until this project reaches to a point it can do things.
+	//actually, it might not take that long until it can load a simple program and execute it.
+	//but until then, here you go...
 	
 	int32_t fd = kopen("hello", 0);
-	if (fd == -1) {
-		terminal_puts("A negative fd. \n");
+	char* buf = kmalloc(18);
+	memset(buf, 0, 18);
+	
+	if (kread(fd, buf, 17) != 17) {
+		terminal_puts("Error reading from file.");
 		return;
 	}
 	
-	kread(fd, buf, 17);
-	
 	terminal_puts(buf);
-	
-	kclose(fd);
-	fd = kopen("hello", 1);
-	
-	memset(buf + 17, '$', 1024 - 18);
-	if (kwrite(fd, buf, 1024) != 1024) {
-		terminal_puts("It seems to me like an error occured, ma boi.\n");
-	}
 	
 	
 	
