@@ -2,7 +2,7 @@
 
 #the target. i686-elf by default, however you can easily change this as
 #long as you make sure the appropriate gcc, as and ar binaries exist.
-export TARGET="i686-elf"
+export TARGET="x86_64-elf"
 export PWD=$(pwd)
 
 export AS="${TARGET}-as"
@@ -13,7 +13,8 @@ export LD="${TARGET}-ld"
 
 
 
-export CFLAGS=" -O3 -g -std=gnu99 -Wall -Wextra"
+export CFLAGS=" -Og -g -std=gnu99 -Wall -Wextra -mcmodel=large -fno-pic -fno-stack-protector -mno-red-zone"
+
 #uncomment this while debugging.
 #CFLAGS="${CFLAGS} -DDEBUG"
 

@@ -6,177 +6,201 @@
 #include <mem.h>
 
 
-memory_map_t physical_memory ;
+memory_map_t physical_memory = {};
 
 memory_map_t* getPhysicalMem() {
 	return &physical_memory;
 }
 
 
-uint8_t ispaValid(uint32_t addr) {
+
+
+uint8_t isppValid(uint64_t page) {
+	
 	for (size_t i = 0; i < physical_memory.num_blocks; i++) {
-		uint32_t base = page_to_addr(physical_memory.blocks[i].base_page);
-		uint32_t top = base + page_to_addr(physical_memory.blocks[i].length);
-		//keep in mind if it is *equal* to "top" then it will be counted as invalid.
-		if ((addr < top) && (addr >= base)) {
-			return 1; //if there's a single match then it is valid.
+		
+		uint64_t base = physical_memory.blocks[i].base_page;
+		uint64_t top = base + physical_memory.blocks[i].length;
+		
+		if ((page < top) && (page >= base)) {
+			return 1;	/* It is within the boundries of a block, so it must be valid. */
 		}
+		
 	}
-	return 0;	//if it reaches here, then we didn't match any valid ranges. that means it is invalid.
+	
+	return 0; /* The page isn't valid/usable. */
 }
 
 
-uint8_t isppValid(uint32_t page) {
-	uint32_t addr = page_to_addr(page);
-	return ispaValid(addr);
+uint8_t ispaValid(uintptr_t addr) {
+	return isppValid(addr_to_page(addr));
 }
 
 
-uint8_t isppUsed(uint32_t page) {
+uint8_t isppUsed(uint64_t page) {
 	if (!isppValid(page)) {
-		return 2;//return a value of 2 if the page isn't valid.
-		//since most functions just use it to determine whether they can use this page like this:
-		// if (!isPhysicalPageUsed(page)) { allocate;}
-		//a value of 2 still indicates it isn't usable. thus preventing some errors.
+		return 2;
+		/* 
+		 * Return a value of 2 if the page isn't valid.
+		 * Most functions will just use this function to determine whether they can 
+		 * use this page like this:
+		 * 	if (!isPhysicalPageUsed(page)) { <call to allocpp here>;}
+		 * a value of 2 still indicates it isn't usable. Thus preventing some errors.
+		 */
 	}
-	uint32_t byte = physical_memory.bitmap[page/32]; //find the byte ou bit will be in.
-	uint32_t bit = (byte >> (page % 32)) & 0b1;	//get the value of the corresponding bit.
+	
+	/* Find the byte our bit will be in. */
+	uint64_t byte = physical_memory.bitmap[page/64]; 	
+	
+	/* Get the value of the corresponding bit. */
+	uint64_t bit = (byte >> (page % 64)) & 0b1;
+	
+	
 	return (uint8_t)(bit);
 }
 
 
-uint8_t ispaUsed(uint32_t addr) {
-	uint32_t page = addr_to_page(addr);
-	return isppUsed(page);
+uint8_t ispaUsed(uintptr_t addr) {
+	return isppUsed(addr_to_page(addr));
 }
 
 
 
-uint8_t setppUsed(uint32_t page, uint8_t value) {
+uint8_t setppUsed(uint64_t page, uint8_t value) {
 	if (!isppValid(page)) {
-		return 1;	//error if it isn't valid
+		return 1;	/* Page is invalid. */
 	}
-	value = value & 0b1; //take only the first bit.
 	
-	uint32_t byte = physical_memory.bitmap[page/32];		//this is slightly misnamed but whatever.
-	uint32_t bit = page % 32;
+	/* A page on the bitmap can only have a single bit for it.*/
+	value = value & 0b1; 
+	
+	
+
+	uint64_t byte = physical_memory.bitmap[page/64];
+	
+	/* Bit number. */
+	uint64_t bit = page % 64; 	
+	
 	
 	if (value == 0) {
-		//set it to zero.
-		byte = byte & (0xFFFFFFFF ^ (1 << bit));
-	} else {
-		//set it to one.
-		byte = byte | (1 << bit);
+		/* 
+		 * This sets it to zero by xor'ing all 1's with the bit, which is then AND'ed
+		 * with byte to set it to zero.
+		 */
+		byte = byte & (0xFFFFFFFFFFFFFFFF ^ (1 << bit));
+		
+	} else { 
+		byte = byte | (1 << bit); 
 	}
-	physical_memory.bitmap[page/32] = byte;
+	
+	/* Now write the byte back into the bitmap. */
+	physical_memory.bitmap[page/64] = byte;
+	
+	
 	return GENERIC_SUCCESS;
 }
 
 
 
-uint32_t allocpp() {
-	//allocates a single physical page and returns its page number
-	for (uint32_t i = 0; i < (sizeof(physical_memory.bitmap)/sizeof(physical_memory.bitmap[0])); i++) {
-		//loop over each integer in the bitmap.
-		uint32_t byt4 = physical_memory.bitmap[i];
-		for (size_t j = 0 ; j < 32; j++) {
-			//loop over each bit.
-			uint32_t bit = byt4 & (1 << j);
-			
-			uint32_t page_num = i * 32 + j;
-			//if it isn't zero, then it is used. skip used entries.
-			if (bit) {
-				continue;
-			}
-			//if it isn't valid, we can't allocate it.
-			if (!isppValid(page_num)) {
-				continue;
-			}
-			
-			//if it is valid and it is free, allocate it.
-			setppUsed(page_num, 1); //mark it as used.
-			return page_num; //return it.
-			
+uint64_t allocpp() {
+	/* This function allocates a single (usable) physical page, and returns its page number. */
+	
+	for (uint64_t i = 0; i < (sizeof(physical_memory.bitmap) * 8); i++) {
+		if (!isppUsed(i)){
+			setppUsed(i, 1);
+			return i;
 		}
-		
-		
 	}
-	return 0xFFFFFFFF;	//invalid page value.
+	
+	/* 
+	 * This is supposed to be an invalid page value. 
+	 * Might be a good idea to change it later. 
+	 */
+	return 0;	
 }
 
 
-uint32_t allocpps(uint32_t amount) {
-	//(unlike what the name suggests) this function finds free, continuous"physical" pages of arbitrary amount,
-	// marks it as "used" and returns the first one's page number. you can then use
-	//that number to calculate starting address, from where you can map it
-	//and use it.
-	//keep in mind this function assumes there is enough memory in "dest",
-	//where the page numbers will be stored.
-	//also keep in mind, this isn't a wrapper around allocpp()
-	//because putting that in a loop would be ineficient as fuck.
-	uint32_t ia = 0;
-	for (size_t i = 0; i < (sizeof(physical_memory.bitmap))*8; i++) {
-		//iterate through all pages.
-		if (isppUsed(i)) {
-			ia = 0;
-			continue;	//if it is used, then start again.
-		}
+uint64_t allocpps(uint64_t amount) {
+	/* 
+	 * This function is like allocpp(), except it allocates multiple, *continous* physical
+	 * pages. It doesn't loop over allocpp() because that would be very inefficient.
+	 */
+	
+	
+	
+	uint64_t ia = 0;
+	for (uint64_t i = 0; i < (sizeof(physical_memory.bitmap))*8; i++) {
+		/* This loop goes over every page available. */
 		
-		//check if the pages that come after this are available as well.
-		for (uint32_t j = 0; j < amount; j++) {
+		for (uint64_t j = 0; j < amount; j++) {
 			if (!isppUsed(i + j)) {
 				ia++;
 			}
 		}
+		
 		if (ia != amount) {
+			/* The amount of continous pages at i was less than the requested amount. */
 			ia = 0;
+			i += amount;	/* We already checked this much. */
 			continue;
 		}
-		//if we're here, then that means we could find a match.
-		//we simply allocate those pages, and return the first one's number.
-		for (uint32_t j = 0; j < amount; j++) {
-			setppUsed(i + j, 1);	//mark them as used.
+		
+		
+		/* If we reached here, then we found the requested amount of pages. */
+		
+		/* Mark the pages as used. */
+		for (uint64_t j = 0; j < amount; j++) {
+			setppUsed(i + j, 1);	
 		}
-		//then return.
+		
+		/* Return the first page's number. */
 		return i;
 	}
-	return -1;	//if we can't find 
-}
-
-
-uint8_t freepp(uint32_t page) {
-	return setppUsed(page, 0);	//yup. this is all it does. deal with it.
-}
-
-
-
-
-uint8_t init_pmm(struct multiboot_header* mbh) {
 	
-	if (!(mbh->flags & 0b1000000)) {
-		/* if we reach here, then bit 6 is not set, meaning mmap_* fields
-		 * of the multiboot header are not valid. We currently cannot retrieve
-		 * a reliable physical memory map without those fields, so we return an error.
-		 * I can hopefully change this in the future.
-		 */
-		 return 1;
+	/* If we're here, then the amount of pages requested could not be found. */
+	return 0;	
+}
+
+
+uint8_t freepp(uint64_t page) {
+	return setppUsed(page, 0);	/* Might be a good idea to make this a macro. */
+}
+
+
+
+
+uint8_t init_pmm(struct stivale2_struct_tag_memmap *memtag) {
+	if (memtag == NULL) {
+		return 1;
+	}
+	if (memtag->tag.identifier != STIVALE2_STRUCT_TAG_MEMMAP_ID) {
+		return 1;
 	}
 	
-	mboot_memmap_t *entry = (mboot_memmap_t*) mbh->mmap_addr;
+	/* 
+	 * This is technically undefined behaviour if we don't set it, so we initialise it here
+	 * with a zero.
+	 */
 	physical_memory.num_blocks = 0;
-	while ((uint32_t)entry < mbh->mmap_addr + mbh->mmap_length) {
-		if (entry->type == USABLE_MEM) {
-			//if it is usable memory we simply add that to the available memory blocks.
-			//remember, this is a 32-bit kernel. this would change dramatically if that wasn't the case.
-			//though I guess a lot of other things would need to change as well, so yeah.
-			physical_memory.blocks[physical_memory.num_blocks++] = _create_block(entry->base_addr_low, entry->length_low); 
-			
+	
+	/* Extract the necessary info from the memory map provided by the bootloader. */
+	for (size_t i = 0; i < memtag->entries; i++) {
+		
+		if (memtag->memmap[i].type != STIVALE2_MMAP_USABLE){
+			/* TODO: add the *-reclaimable fields to the memory map as well. */
+			continue;
 		}
-		//otherwise, we skip it.
-		entry = (mboot_memmap_t*) ((uint32_t)entry + entry->size + sizeof(entry->size));
+		_create_block(memtag->memmap[i].base, memtag->memmap[i].length, &(physical_memory.blocks[physical_memory.num_blocks]));
+		physical_memory.num_blocks++;
 	}
 	
-	return GENERIC_SUCCESS;
+	
+	/* Mark the first 4 MiBs as used. */
+	for (size_t i = 0; i < 16; i++) {
+		physical_memory.bitmap[i] = 0xFFFFFFFFFFFFFFFF;
+	}
+	
+	return 0;
 }
 
 

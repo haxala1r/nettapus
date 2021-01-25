@@ -3,44 +3,37 @@
 #include <mem.h>
 
 USTAR_FILE_t* ustar_file_lookup(file_system_t* fs, char* file_name) {
-	//fs is the file system to look in.
-	//file_name is the file name.
-	//the return value is a USTAR_FILE structure with the necessary data.
-	//NULL is returned when the file cannot be found.
+	/* This function locates the file givena a filename, and returns a struct with relevant info. */
 	
-	//this buffer is used to hold the data read from the disk. it doesn't serve a purpose
-	//other than that.
+	/* This is used to hold the data we read from disk. */
 	uint8_t* buf = kmalloc(512);
 	
-	//this variable holds which sector of the fs we need to read. it will be incremented
-	//as necessary in the loop.
+	/* Holds the sector we're currently going to read. */
 	uint32_t sector = 0;	
 	
 	
 	
-	//load the first sector of the file system into memory.
+	/* This is tar, so the files start at the first sector of the filesystem. */
 	if (fs_read_sectors(fs, 0, 1, buf)) {
-		//an error occured.
 		kfree(buf);
-		return NULL;
+		return NULL;	/* An error must've occured. */
 	}
 	
-	//this loop iterates through the entire archive.
+	/* This loop iterates through the entire archive. */
 	while (!memcmp(buf + 257, "ustar", 5)) {
 		uint32_t file_size = oct2bin((char*)buf + 124, 11);
 		
-		//check if this is the file we're looking for
+		/* Check if this is the file we're looking for. */
 		if (!memcmp(buf, file_name, strlen(file_name) + 1)) {
-			//we found it, now we can return.
 			
-			//this is the data we're going to return.
+			/* Collect the necessary info. */
 			USTAR_FILE_t* file = kmalloc(sizeof(USTAR_FILE_t));
 			
 			memcpy(file->file_name, buf, 100);
 			memcpy(file->owner_user_name, buf + 265, 32);
 			memcpy(file->owner_group_name, buf + 297, 32);
 			
-			file->type = buf[156];	//the type flag.
+			file->type = buf[156];	
 			file->starting_lba = sector;
 			file->size = file_size;
 			
@@ -48,17 +41,11 @@ USTAR_FILE_t* ustar_file_lookup(file_system_t* fs, char* file_name) {
 		}
 		
 		
-		//this is not it either, skip.
-		
+		/* Skip to the next file in the archive. */
 		sector += (((file_size + 511) / 512) + 1);
 		if (fs_read_sectors(fs, sector, 1, buf)) {
-			//an error occured.
-			
 			break;
 		}
-		
-		
-		
 	}
 	
 	kfree(buf);
@@ -68,115 +55,84 @@ USTAR_FILE_t* ustar_file_lookup(file_system_t* fs, char* file_name) {
 
 
 uint8_t ustar_load_file(file_system_t* fs, USTAR_FILE_t* file, void* buf) {
-	//fs is the file system to be read from.
-	//file_name is the file name.
-	//buf is the buffer to be written to. The file will be loaded there.
-	//return value indicates whether the function encountered an error or not.
-	//return value of 0 = success, while any other value means an error.
-	
-	if (!file) {
+	/* This function reads the entire file, and loads it into buf. */
+	if (file == NULL) {
 		return 1;
 	}
 	
 	
-	
 	uint32_t starting_lba = file->starting_lba;
-	starting_lba++;	//increment it, because we don't need the "meta-data sector".
 	
-	
+	/* Increment this, because it is the LBA of the meta-data sector. We want the data sector. */
+	starting_lba++;
 	
 	uint8_t* dest 	= (uint8_t*)buf;
 	
 	if ((file->size / 512) == 0) {
-		//then the file doesn't occupy a full sector.
-		//so we do the "remainder" part early.
-		
-		//we need a temporary buffer. we will first read the sector here, and then copy the
-		//necessary parts to dest. This is necessary as reading the entire sector
-		//directly to dest can cause data corruption.
+		/* The file occupies less than a full sector. */
 		uint8_t* temp = kmalloc(512);
 		
 		if (fs_read_sectors(fs, starting_lba, 1, (uint16_t*)temp)) {
-			//error.
 			kfree(temp);
 			return 1;
 		} 
 		
-		//now a memcpy call should do it.
 		memcpy(dest, temp, file->size % 512);
 		kfree(temp);
 		return 0;
 	}
 	
 	
-	
-	
-	//this loop transfers the whole sectors within the file. the remainder will be done
-	//after this.
-	
 	if (fs_read_sectors(fs, starting_lba, file->size/512, (uint16_t*)(dest))) {
 		return 1;	//error while reading.
 	}
 	
-	
-	
 	if (file->size % 512 == 0) {
-		//if there is no "remainder", don't even bother continuing after here.
-		//I'm doing this because reading from a disk is pretty damn slow.
 		return 0;
 	}
 	
-	
-	//increment it, because we need to read the last sector now.
+	/* Increment it, because we need to read the last sector now. */
 	starting_lba += file->size / 512;
 	
 	
-	//we need a temporary buffer. we will first read the sector here, and then copy the
-	//necessary parts to dest. This is necessary as reading the entire sector
-	//directly to dest can cause data corruption.
+	/* First read the entire sector to temp, then only copy the requested amount. */
 	uint8_t* temp = kmalloc(512);
 		
 	if (fs_read_sectors(fs, starting_lba, 1, (uint16_t*)temp)) {
-		//error.
 		kfree(temp);
 		return 1;
 	} 
 	
-	//now a memcpy call should do it.
 	memcpy(dest + (file->size / 512), temp, file->size % 512);
 	kfree(temp);
 	return 0;
 	
 };
 
+
+
+
+
+
 uint8_t ustar_read_file(file_system_t* fs, USTAR_FILE_t* file, void* buf, uint32_t offset, uint32_t bytes) {
-	//fs is the file system to be read from.
-	//file_name is self-explanatory.
-	//buf is the buffer to be read into. It is assumed to have enough space.
-	//offset is the offset to be read from, in bytes.
-	//bytes is the amount of bytes to be read.
+	/* This function reads bytes from file on fs, at offset. Hope that makes sense. */
 	
-	
-	
-	if (!file) {
+	if (file == NULL) {
 		return 1;
 	}
-	
 	
 	uint32_t starting_sector = file->starting_lba;
 	
 	
-	//skip the metadata.
+	/* Skip the metadata. */
 	starting_sector++;
 	
-	//now we need to figure out which sector we're gonna start reading from.
+	/* Now we need to figure out which sector we're going to start reading from. */
 	starting_sector += offset / 512;
 	
-	
-	
-	//now to read and store the proper data.
+	/* Now perform the disk access. */
 	if (fs_read_bytes(fs, buf, starting_sector, offset % 512, bytes)) {
-		return 1;	//an error.
+		return 1;
 	}
 	
 	return 0;
@@ -184,12 +140,7 @@ uint8_t ustar_read_file(file_system_t* fs, USTAR_FILE_t* file, void* buf, uint32
 
 
 uint8_t ustar_write_file(file_system_t* fs, USTAR_FILE_t* file, void* buf, uint32_t offset, uint32_t bytes) {
-	//fs is the file system to be read from.
-	//file_name is self-explanatory.
-	//buf is the buffer to be read into. It is assumed to have enough space.
-	//offset is the offset to be read from, in bytes.
-	//bytes is the amount of bytes to be written.
-	
+	/* This function writes bytes from buf to file on fs, at offset. */
 	
 	if (file == NULL) {
 		return 1;
@@ -201,16 +152,15 @@ uint8_t ustar_write_file(file_system_t* fs, USTAR_FILE_t* file, void* buf, uint3
 	
 	uint32_t starting_sector = file->starting_lba;
 	
-	
-	//skip the metadata.
+	/* Skip the meta-data. */
 	starting_sector++;
 	
-	//now we need to figure out which sector we're gonna start reading from.
+	/* Figure out at which sector we need to start reading from. */
 	starting_sector += offset / 512;
 	
 	
 	
-	//now to read and store the proper data.
+	/* Perform the disk access. */
 	if (fs_write_bytes(fs, buf, starting_sector, offset % 512, bytes)) {
 		return 1;	//an error.
 	}
@@ -219,10 +169,13 @@ uint8_t ustar_write_file(file_system_t* fs, USTAR_FILE_t* file, void* buf, uint3
 };
 
 
+
+
+
+
+
 uint8_t ustar_enlarge_file(file_system_t* fs, USTAR_FILE_t* file, uint32_t bytes) {
-	//fs is the file system file is in.
-	//file is the file that will be enlarged.
-	//bytes is the amount of bytes the file will be enlarged by.
+	/* This function enlarges file on fs by bytes. */
 	
 	/* This function's logic goes like this:
 	 * Since the TAR format doesn't support fragmentation, that means (in order to enlarge the
@@ -245,25 +198,19 @@ uint8_t ustar_enlarge_file(file_system_t* fs, USTAR_FILE_t* file, uint32_t bytes
 			//in this case, since enlarging the file won't cross a sector-boundary,
 			//we don't actually need to move anything at all.
 			//so we simply update the metadata, and return a success.
-			char zeroes[bytes];
 			
-			memset(zeroes, 0, bytes);
-			//zero out the newly allocated place.
-			/*if (fs_write_bytes(fs, zeroes, file->starting_lba + (file->size/512) + 1, (file->size % 512), bytes)) {
-				return 1;
-			}*/
 			
 			file->size += bytes;
-			//now change the info on the actual disk.
+			
+			/* Update meta-data. */
 			char fsize[12] = {};
 			memset(fsize, 0, 12);
-			//TODO, add some code to actually convert from binary to octal here.
+
 			bin2oct(file->size, fsize, 11);
 			
 			
 			
-			//for some reason fs_write_bytes didn't work, so instead let's read the
-			//meta-data sector, change it then write it back.
+			/* No need to call fs_write_bytes. */
 			uint8_t* buf = kmalloc(512);
 			if (fs_read_sectors(fs, file->starting_lba, 1, buf)) {
 				kfree(buf);
@@ -273,14 +220,13 @@ uint8_t ustar_enlarge_file(file_system_t* fs, USTAR_FILE_t* file, uint32_t bytes
 			memcpy(buf + 124, fsize, 11);
 			
 			
+			/* Write it back to disk. */
 			if (fs_write_sectors(fs, file->starting_lba, 1, buf)) {
 				kfree(buf);
 				return 1;
 			}
 			
 			kfree(buf);
-			
-			//now we should be done.
 			return 0;
 		}
 	}
@@ -312,10 +258,10 @@ uint8_t ustar_enlarge_file(file_system_t* fs, USTAR_FILE_t* file, uint32_t bytes
 	
 	
 	//because of the way the loop works, sector currently points to what is *after* the
-	//data section of the last file of the archive, not the last sector. By exactly one (1) sector.
+	//data section of the last file of the archive, not the last sector. 
 	sector--;	
 	
-	//now we now the LBA of the last sector of the entire archive. now we determine the 
+	//now we know the LBA of the last sector of the entire archive. now we determine the 
 	//file's last sector, then loop and move everything forwards until we reach that sector.
 	uint32_t file_last = file->starting_lba + ((file->size + 511)/512);
 	

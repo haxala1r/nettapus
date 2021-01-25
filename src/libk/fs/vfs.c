@@ -282,17 +282,19 @@ int32_t kclose(int32_t file_des) {
 	i->next = i->next->next;	//not using f for clarity.s
 	
 	
-	//should be done.
 	
 	return file_des;
 };
 
 
-int32_t kseek(int32_t file_des, uint32_t new_pos) {
+int32_t kseek(int32_t file_des, uint64_t new_pos) {
+	
 	FILE* f = vfs_fd_lookup(file_des);
+	
 	if (!(new_pos < f->node->size)) {
 		return -1;
 	}
+	
 	f->position = new_pos;
 	return 0;
 };
@@ -300,7 +302,7 @@ int32_t kseek(int32_t file_des, uint32_t new_pos) {
 
 
 
-int32_t kread(int32_t file_des, void* buf, uint32_t bytes) {
+int32_t kread(int32_t file_des, void* buf, uint64_t bytes) {
 	//WOOO the classics!
 	//TODO: change this and the file system drivers so that this function returns
 	//the amount of bytes actually read, instead of returning the bytes parameter directly. 
@@ -332,7 +334,7 @@ int32_t kread(int32_t file_des, void* buf, uint32_t bytes) {
 	//now we need to find the appropriate file system driver and pass the required parameters.
 	
 	switch (node->fs->fs_type) {
-		case FS_USTAR: 	status = ustar_read_file(node->fs, (USTAR_FILE_t*)node->special, buf, f->position, bytes); break;
+		case FS_USTAR: 	status = ustar_read_file(node->fs, (USTAR_FILE_t*)node->special, buf, f->position, (uint32_t)bytes); break;
 		case 0xFF: 	status = 0xFF; break;
 	}
 	
@@ -357,7 +359,7 @@ int32_t kread(int32_t file_des, void* buf, uint32_t bytes) {
 };
 
 
-int32_t kwrite(int32_t file_des, void* buf, uint32_t bytes) {
+int32_t kwrite(int32_t file_des, void* buf, uint64_t bytes) {
 	//and now write!
 	//This is a simple-enough implementation. Takes a buffer and amount of bytes, and writes
 	//it to a file.
@@ -405,7 +407,7 @@ int32_t kwrite(int32_t file_des, void* buf, uint32_t bytes) {
 	
 	//now the actual disk access.
 	switch (node->fs->fs_type) {
-		case FS_USTAR: 	status = ustar_write_file(node->fs, (USTAR_FILE_t*)node->special, buf, f->position, bytes); break;
+		case FS_USTAR: 	status = ustar_write_file(node->fs, (USTAR_FILE_t*)node->special, buf, f->position, (uint32_t)bytes); break;
 		case 0xFF: 		status = 0xFF; break;
 		default: 		status++;
 	}

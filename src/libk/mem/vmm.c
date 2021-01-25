@@ -1,281 +1,337 @@
 
-//this file contains the Virtual Memory Management (TM) parts of the Memory Manager (TM) of my hobby OS (TM)
-//for Heap (TM) and Physical Memory Management (TM) look at the other files in the same directory.
+/* This file contains the Virtual Memory Manager. (TM)*/
 
 #include <mem.h>
 
 
+/* Define the first structs, and initialise them with all zeroes. Necessary to bootstrap. */
+p_map_level4_table __attribute__((aligned(4096))) kpml4 	= {};
+pd_ptr_table __attribute__((aligned(4096))) k_first_pdpt 	= {};
+page_dir __attribute__((aligned(4096))) k_first_pd 			= {};
+page_table __attribute__((aligned(4096))) k_first_table 	= {};
+page_table __attribute__((aligned(4096))) k_sec_table 	= {};
 
-//the first two page tables are provided within the binary. cuz why not?
-uint32_t fpage_table[1024] __attribute__((aligned(4096)));
-uint32_t spage_table[1024] __attribute__((aligned(4096)));
-
-
-page_directory_t kernel_page_dir __attribute__((aligned(4096)));	//page directory for the kernel process.
-//I wanted this to be used internally for the VMM (TM), so I got it here. you can stil get a pointer to it with:
-page_directory_t* kgetPageDir() {
-	//return (page_directory_t*)0xFFFFF000;	//since we're doing the self-reference trick, we can just say this.
-	//EDIT: I edited this out, because this completely breaks the physical_address
-	//attribute of a page_directory_t. Think about it for a while, I'm sure you'll
-	//get why. And if you don't, too bad!
-	return &kernel_page_dir;
-}
-//...though.
-
-
-void kflush_page_dir() {
-	//just loads the kernel's page directory.
-	//loadPageDirectory((uint32_t*)((uint32_t)(kgetPageDir()) - 0xC0000000));
-	loadPageDirectory((uint32_t*)(kgetPageDir()->physical_address));
-	return;
-}
+p_map_level4_table* kgetPML4T(void) {
+	return &kpml4;
+};
 
 
 
+/* 
+ * In order to map things a bit more seamlessly, I decided it was a good idea to
+ * reserve a portion of memory for dynamically allocating paging structures 
+ * (PML4T, PDPT, PD etc.).
+ * 
+ * This has the benefit that it is easy to determine their physical addresses, so less
+ * effort is necessary there, and it is also easier to guarantee that the allocated sturctures
+ * will be page-aligned.
+ * 
+ * These couple global variables are used for that purpose.
+ * 
+ * Here's how it works: 
+ * Firstly, this is a "heap" of fixed-size blocks (each block contains sizeof(page_struct) bytes).
+ * Each block begins at the next page-aligned address after the end of the previous block.
+ * The first two pages are reserved for a bitmap, keeping track of what blocks are used 
+ * and which are free.
+ * So  here's how an example would look:
+ * Page 0x0 	-> Bitmap
+ * Page 0x1 	-> Bitmap
+ * Page 0x2 	-> Block1's beginning
+ * Page 0x5 	-> Block2's beginning
+ * Page 0x8 	-> Block2's beginning
+ * 		.
+ * 		.
+ * 		.
+ * page 0x1F8	-> Last block.
+ * 
+ * TODO: Merging this with the actual heap would be great.
+ */
+uint64_t page_heap_begin;			/* Beginning address. */
+uint64_t page_heap_phys;			/* Beginning address. */
+uint64_t page_heap_bitmap_length;	/* Amount of bytes the bitmap occcupies. */ 
+uint64_t page_heap_length;			/* Length, in bytes.  */
+uint64_t *page_heap_bitmap;		
+struct page_struct *page_heap_first;
 
 
-
-uint8_t isvpMapped(uint32_t vp, page_directory_t *pd) {
-	if (pd->dir[vp / 1024] & 0x1) {
-		uint32_t* tb = (uint32_t*)(pd->dir[vp / 1024] & 0xFFFFF000);	//find the table address, which we'll use.
-		uint32_t entry = vp % 1024;	//mod by 1024 to find the entry within the table.
-		return (tb[entry] & 0b1);	//simply checks if the page is marked present or not.
-	}
-	//if table isn't marked present, then the page must not be present.
-	return 0;
-}
-
-uint8_t isvaMapped(uint32_t va, page_directory_t *pd) {
-	return isvpMapped(addr_to_page(va), pd);
-}
-
-uint32_t findvp(page_directory_t* pd) {
-	//scan each table. the last one is reserved, as it is mapped to pd itself.
-	for (size_t i = 0; i < 1023; i++) {
-		
-		//scan each entry.
-		for (size_t j = 0; j < 1024; j++) {
-			if (isvpMapped(i * 1024 + j, pd)) {
-				//if it is used, skip.
-				continue;
-			}
-			return (i * 1024 + j);
-		}
-	}
-	return 0xFFFFFFFF;	//invalid value for a page.
-}
-
-
-
-
-
-	//maps a physical page to a virtual one. refuses to work when virtual page is already mapped to.
-uint8_t mapPage(uint32_t pp, uint32_t vp, page_directory_t *pd) {
-	//maps a physical page to a vritual one, given page numbers and a page directory.
-	
-	if (isppValid(pp) == 0) {	//if pp isn't valid, we can't map it.
-		return 1;
-	}
-	if (isvpMapped(vp, pd)) {
-		
-		return 1;	//can't map to it if the vp is already mapped to some address.
-	}
-	
-	if ((pd->dir[vp / 1024] & 0xFFFFF000) == 0x00000000) {
-		//the virtual page literally isn't available, not much we can do here.
-		//we should return a unique error to show the need for more page tables.
-		
-		return 2;
-	}
-	uint32_t table_num = vp / 1024;	//get the table.
-	uint32_t table_entry = vp % 1024;	//get the entry within the table.
-	
-	uint32_t entry = ((uint32_t*)(pd->dir[table_num] & 0xFFFFF000))[table_entry];
-	entry = entry & 0xFFF;	//only the first 12 bits will be preserved, as they are flags. other bits might hold trash data.
-	entry = entry | (page_to_addr(pp)) | 0b11;	//add the address to the entry, and mark it as present.
-	
-	
-	((uint32_t*)(pd->dir[table_num] & 0xFFFFF000))[table_entry] = entry;	//write the entry to the table.
-	
-	
-	
-	return GENERIC_SUCCESS;
-}
-
-	//unmaps a virtual page, while freeing its physical page as well. this is why i didn't allow for a page to be mapped twice.
-uint8_t unmapPage(uint32_t vp, page_directory_t* pd) {
-	uint32_t* tb = (uint32_t*)(pd->dir[vp / 1024] & 0xFFFFF000);
-	uint32_t entry_num = vp % 1024;
-	uint32_t pa = tb[entry_num] & 0xFFFFF000;
-	freepp(addr_to_page(pa));	//frees the physical page as well. keep this in mind.	
-	tb[entry_num] = tb[entry_num] & 0xFFE;	//keeps all flags except "Present" and wipes the address.
-	return GENERIC_SUCCESS;
-}
-
-	//identity maps a single page, given that both the physical and virtual pages are "free".
-uint8_t idMapPage(uint32_t pp, page_directory_t* pd) {
-	if (isppUsed(pp)) {
-		return 1;
-		
-	}
-	uint32_t status = mapPage(pp, pp, pd);
-	if (status) {
-		return status;
-	}
-	setppUsed(pp, 1);	//mark it as used.
-	return GENERIC_SUCCESS;
-}
-
-	//identity maps a range of pages. don't know what you would use this with, but you're welcome I guess.
-uint8_t idMapRange(uint32_t start, uint32_t end, page_directory_t* pd) {
-	if (start >= end) {
-		return 1;	//if that's the case, then what the fuck?
-	}
-	
-	//first, check if all the physical and virtual pages in that region are free.
-	
-	//if they are all free, we can safely ID map them.
-	for (uint32_t i = start; i < end; i++) {
-		if (isppUsed(i)) {
-			continue;	//if any one of the physical pages in that region are used, then skip this iteration.
-			//I thought about just freeing it but that could lead to a lot of problems, so for now
-			//we just pretend we can't do anything about it.
-		}
-		if (isvpMapped(i, pd)) {
+struct page_struct *alloc_page_struct(void) {
+	for (size_t i = 0; i < (page_heap_bitmap_length * 8) ; i++) {
+		uint64_t byte8 = page_heap_bitmap[i/64];
+		uint64_t bit   = i % 64;
+		if (byte8 & (1 << bit)) {
+			/* It is used. */
 			continue;
 		}
-		if (idMapPage(i, pd)) {
-			return 1;	//if an error occurs (somehow) then return.
-		}
-	}
-	return GENERIC_SUCCESS;
-}
-
-
-
-
-	//kernel page map physical (to) virtual.
-uint8_t kpmappv(uint32_t pp, uint32_t vp) {
-	//since all other kernel-page-mapping functions rely on this one, I thought it
-	//would be a good place to do the "flush" thing where you reload the page directory
-	//to make the changes take effect.
-	uint8_t status = mapPage(pp, vp, kgetPageDir()); //because we need to compare the status to multiple values.
-	if (status == 1) {
-		return 1;
-	} /*else if (status == 2) {
-		//the page table the vp resides in does not exist. we should create a page table, 
-		//call it again.
 		
-	}*/
+		/* Mark it as used and return it. */
+		byte8 = byte8 | (1 << bit);
+		page_heap_bitmap[i/64] = byte8;
+		
+		struct page_struct *ps = (struct page_struct*)(page_heap_begin + page_heap_bitmap_length + i * 0x3000);
+		uintptr_t ps_addr = (uintptr_t)ps;
+		
+		memset(ps, 0, sizeof(ps));
+		ps->physical_address = (ps_addr - page_heap_begin) + page_heap_phys;
+		
+		return ps;
+	}
+	return NULL;
+};
+
+void free_page_struct(struct page_struct *ps) {
+	struct page_struct *pi = page_heap_first;
+	for (size_t i = 0; i < (page_heap_bitmap_length * 8) ; i++) {
+		if (pi == ps) {
+			/* Found its index. */
+			uint64_t byte8 = page_heap_bitmap[i/64];
+			uint64_t bit = i % 64;
+			
+			byte8 = byte8 & (0xFFFFFFFFFFFFFFFF ^ (1 << bit));
+			break;
+			
+		}
+		pi++;
+	}
+	return;
+};
+
+
+
+
+uint8_t map_memory(uint64_t pa, uint64_t va, uint64_t amount, p_map_level4_table* pml4t) {
+	/* This function maps an arbitrary amount of continous physical pages to virtual ones. 
+	 * A couple things to keep in mind:
+	 * 	This function does not check or care whether the physical page is valid.
+	 * 	This function does not check or care whether the physical page is being used.
+	 * 	This function does not set the 'used' bit of the physical page.
+	 * 
+	 * Truth is, it is not supposed to do any of those things. This function only does what
+	 * it's supposed to do. And because of that, generally, you want to use some of the other
+	 * functions.
+	 */
+	/* TODO: Add some logic to allocate memory *for* the page structures, so that
+	 * the caller does not have to do that every time. 
+	 * It might be a good idea to reserve a specific part of memory for that.
+	 */
+
+	 
+	if (pml4t == NULL) {
+		return 1;	
+	} 
 	
-	kflush_page_dir();	//we need to "refresh" the MMU or something like that, which means we gotta re-load it.
+	/* Zero out the first 12 bits. */
+	pa &= 0xFFFFFFFFFFFFF000;	
+	va &= 0x0000FFFFFFFFF000;
+	
+	
+	uint64_t pml4t_index 	= va / 0x8000000000;
+	pd_ptr_table* pdpt 	= pml4t->child[pml4t_index];
+	if (pdpt == NULL) {
+		/* These NULL checks simply allocate more page structures if they are not found. */
+		struct page_struct *news = alloc_page_struct();
+		pml4t->child[pml4t_index] = news;
+		pml4t->entries[pml4t_index] = news->physical_address | 2 | 1;
+		pdpt = news;
+	}
+
+	uint64_t pdpt_index  	= (va % 0x8000000000) / 0x40000000;
+	page_dir* pd 		= pdpt->child[pdpt_index];
+	if (pd == NULL) {
+		struct page_struct *news = alloc_page_struct();
+		pdpt->child[pdpt_index] = news;
+		pdpt->entries[pdpt_index] = news->physical_address | 2 | 1;
+		pd = news;
+	}
+
+	uint64_t pd_index 		= (va % 0x40000000) / 0x200000;
+	page_table* pt		= pd->child[pd_index];
+	if (pt == NULL) {
+		struct page_struct *news = alloc_page_struct();
+		page_table *newt;
+		newt = (page_table*)news;
+		newt->physical_address = news->physical_address;
+		
+		pd->child[pd_index] = newt;
+		pd->entries[pd_index] = newt->physical_address | 2 | 1;
+		pt = newt;
+	}
+
+	uint64_t pt_index		= (va % 0x200000) / 0x1000;
+	
+	
+	
+	for (uint64_t i = 0; i < amount; i++) {
+		if (((va/0x1000) % 512) == 0) {
+			/* We crossed tables/structs, and we need to recalculate every index. */
+			pml4t_index 	= va / 0x8000000000;
+			pdpt 	= pml4t->child[pml4t_index];
+			if (pdpt == NULL) {
+				struct page_struct *news = alloc_page_struct();
+				pml4t->child[pml4t_index] = news;
+				pml4t->entries[pml4t_index] = news->physical_address | 2 | 1;
+				pdpt = news;
+			}
+		
+			pdpt_index  	= (va % 0x8000000000) / 0x40000000;
+			pd 		= pdpt->child[pdpt_index];
+			if (pd == NULL) {
+				struct page_struct *news = alloc_page_struct();
+				pdpt->child[pdpt_index] = news;
+				pdpt->entries[pdpt_index] = news->physical_address | 2 | 1;
+				pd = news;
+			}
+		
+			pd_index 		= (va % 0x40000000) / 0x200000;
+			pt		= pd->child[pd_index];
+			if (pt == NULL) {
+				struct page_struct *news = alloc_page_struct();
+				page_table *newt;
+				newt = (page_table*)news;
+				newt->physical_address = news->physical_address;
+				
+				pd->child[pd_index] = newt;
+				pd->entries[pd_index] = newt->physical_address | 2 | 1;
+				pt = newt;
+			}
+		}
+		
+		/* The page table index needs to be "recalculated" every time. */
+		pt_index		= (va % 0x200000) / 0x1000;
+		pt->entries[pt_index] = (pa + i * 0x1000) | 2 | 1;
+		
+		va += 0x1000;
+	}
+	
+	
 	return 0;
-}
+};
 
-uint8_t kmmappv(uint32_t pa, uint32_t va) {
-	if ((pa & 0xFFF) != (va & 0xFFF)) {
-		//its impossible to map addresses with last 12 bits that don't match. 
-		//for now, at least.
+uint8_t unmap_memory(uint64_t va, uint64_t amount, p_map_level4_table* pml4t) {
+	/* 
+	 * This function unmaps virtual pages. 
+	 * It works with the same logic as map_memory, except instead of setting the entry
+	 * to physical address ORed with 3, it sets the entry to 0.
+	 */
+	 if (pml4t == NULL) {
+		return 1;	
+	} 
+	
+	/* Zero out the first 12 bits. */
+	va &= 0x0000FFFFFFFFF000;
+	
+	
+	uint64_t pml4t_index 	= va / 0x8000000000;
+	pd_ptr_table* pdpt 	= pml4t->child[pml4t_index];
+	if (pdpt == NULL) {
 		return 1;
 	}
-	return kpmappv(addr_to_page(pa), addr_to_page(va));
-}
 
-
-
-
-	//kernel page map (to) virtual. 
-uint8_t kpmapv(uint32_t vp) {
-	return kpmappv(allocpp(), vp);
-}
-
-uint8_t kmmapv(uint32_t va) {
-	return kmmappv(page_to_addr(allocpp()), va);
-}
-
-
-	//kernel page map
-uint32_t kpmap() {
-	uint32_t vp = findvp(kgetPageDir());
-	if (kpmapv(vp)) {
-		return 0;
-	}
-	return page_to_addr(vp);
-}
-
-	//kernel page ID map. returns a random ID mapped page.
-uint32_t kpimap() {
-	uint32_t pp = allocpp();
-	freepp(pp);
-	while (idMapPage(pp, kgetPageDir()) == 1) {
-		//simple loop to find an id-mappable page, then return its address.
-		pp++;	//simply try the next one.
-	}
-	return page_to_addr(pp);
-}
-	//kernel page unmap. unmaps a vp for the kernel.
-uint32_t kpumap(uint32_t page_num) {
-	if (unmapPage(page_num, kgetPageDir())) {
+	uint64_t pdpt_index  	= (va % 0x8000000000) / 0x40000000;
+	page_dir* pd 		= pdpt->child[pdpt_index];
+	if (pd == NULL) {
 		return 1;
-	} else {
-		kflush_page_dir();
-		return 0;
 	}
-}
 
+	uint64_t pd_index 		= (va % 0x40000000) / 0x200000;
+	page_table* pt		= pd->child[pd_index];
+	if (pt == NULL) {
+		return 1;
+	}
 
-
-
-
-//uint32_t kernel_end = 0x123;
-uint8_t init_vmm() {
-
-	initPageDir(&kernel_page_dir);	//initialise the page directory for the kernel
-	
-	//this one is something that worries me: I have absolutely no clue why,
-	//but it won't let me edit this out. if I do, the OS just crashes.
-	//so for now, this line is going to stay, though I'd much rather remove it.
-	kernel_page_dir.dir[0] = ((uint32_t)(&fpage_table) - 0xC0000000) | 0x2 | 0x1;
+	uint64_t pt_index		= (va % 0x200000) / 0x1000;
 	
 	
 	
-	kernel_page_dir.dir[768] = ((uint32_t)(&fpage_table) - 0xC0000000) | 0x2 | 0x1;
-	//added a second page table to actually be able to create heap outside of the first allocated 4M. 
-	kernel_page_dir.dir[769] = ((uint32_t)(&spage_table) - 0xC0000000) | 0x2 | 0x1;
+	for (uint64_t i = 0; i < amount; i++) {
+		pml4t_index 	= va / 0x8000000000;
+		pdpt 	= pml4t->child[pml4t_index];
+		if (pdpt == NULL) {
+			continue;
+		}
 	
-	//essentially, we map the last entry to the directory itself.
-	//this makes it easier to access this thing, as it is literally always at a fixed virtual address.
-	//now 0xffc00000 always points to the start of the page directory.
-	kernel_page_dir.dir[1023] = ((uint32_t)kernel_page_dir.dir - 0xC0000000) | 0x2 | 0x1;	//map the last entry to itself.
+		pdpt_index  	= (va % 0x8000000000) / 0x40000000;
+		pd 		= pdpt->child[pdpt_index];
+		if (pd == NULL) {
+			continue;
+		}
+	
+		pd_index 		= (va % 0x40000000) / 0x200000;
+		pt		= pd->child[pd_index];
+		if (pt == NULL) {
+			continue;
+		}
+
+		pt_index		= (va % 0x200000) / 0x1000;
+
+
+		pt->entries[pt_index] = 0;
+		
+		va += 0x1000;
+	}
+	
+	
+	return 0;
+	 
+};
+
+uint8_t init_vmm(void) {
+	kpml4.child[511] 		= &k_first_pdpt;
+	k_first_pdpt.child[510]	= &k_first_pd;
+	k_first_pd.child[0]		= &k_first_table;
+	k_first_pd.child[1]		= &k_sec_table;
 	
 	/* 
-	 * we need to do the area below 1M manually because the PMM considers it
-	 * "unavailable" but the tty.h header file depends on it.
-	 * And thats why we're basically ID mapping the entire area below 
-	 * the end of the kernel.
+	 * Set up the tables, and also record their physical addresses. 
+	 * Divide kernel_virt_base by 8 because a single entry occupies 8 bytes.
 	 */
-	 
-	for (size_t i = 0; i < 1024; i++) {
-		
-		fpage_table[i] = (page_to_addr(i)) | 0x2 | 0x1;
-		setppUsed(i, 1);	//mark the physical page as used, because... it kind of... is?
+	kpml4.physical_address			= (uintptr_t)((char*)kpml4.entries        - kernel_virt_base);
+	kpml4.entries[511] 				= (uint64_t)((char*)k_first_pdpt.entries   - kernel_virt_base) | 2 | 1;
+	
+	k_first_pdpt.physical_address 	= (uintptr_t)((char*)k_first_pdpt.entries  - kernel_virt_base);
+	k_first_pdpt.entries[510] 		= (uint64_t)((char*)k_first_pd.entries     - kernel_virt_base) | 2 | 1; 
+	
+	k_first_pd.physical_address		= (uintptr_t)((char*)k_first_pd.entries    - kernel_virt_base); 
+	k_first_pd.entries[0] 			= (uint64_t)((char*)k_first_table.entries  - kernel_virt_base) | 2 | 1; 
+	k_first_pd.entries[1] 			= (uint64_t)((char*)k_sec_table.entries  - kernel_virt_base) | 2 | 1; 
+	
+	
+	k_first_table.physical_address	= (uintptr_t)((char*)k_first_table.entries - kernel_virt_base);
+	k_sec_table.physical_address	= (uintptr_t)((char*)k_sec_table.entries - kernel_virt_base);
+	
+	/* Map the pages the kernel is on. */
+	if (map_memory(kernel_phys_base, kernel_virt_base + kernel_phys_base, 0x200, &kpml4)) {
+		while (1) {
+			asm volatile ("hlt;");	/* Halt if we can't map everything properly. */
+		}
 	}
 	
-	//I should really implement a way of getting more page tables in.
 	
 	
 	
+	/* Map the heap-like structure we will use to allocate more page structs. */
+	uint64_t pp_count = 512;	
+	uint64_t base_pp = allocpps(pp_count);
+	if (base_pp) {
+		map_memory(page_to_addr(base_pp), kernel_virt_base, pp_count, &kpml4);
+		
+		page_heap_begin = kernel_virt_base;
+		page_heap_phys = page_to_addr(base_pp);
+		page_heap_length = 0x200000;
+		
+		page_heap_bitmap = (uint64_t*) page_heap_begin;
+		page_heap_bitmap_length = 0x2000;	/* Two pages. */
+		
+		for (size_t i = 0; i < page_heap_bitmap_length; i++) {
+			page_heap_bitmap[i] = 0;
+		}
+		
+		page_heap_first = (struct page_struct*) (page_heap_begin + page_heap_bitmap_length);
+		
+	}
 	
-	loadPageDirectory((uint32_t*)(kernel_page_dir.physical_address));
 	
-	
+	/* Load the new page tables. */
+	loadPML4T((uint64_t*)kpml4.physical_address);
 	
 	return GENERIC_SUCCESS;
 }
-
-
-
-
-
-
-

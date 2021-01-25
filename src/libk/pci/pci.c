@@ -18,7 +18,7 @@ uint32_t pci_get_address(uint8_t bus, uint8_t slot, uint8_t func) {
 
 uint32_t pci_read_field(uint32_t address, uint8_t offset) {
 	outl(PCI_ADDRESS_PORT, address | (offset & 0xfc));
-	return inl(0xcfc);
+	return inl(PCI_VALUE_PORT);
 }
 
 
@@ -156,6 +156,7 @@ void pci_reg_device(uint8_t bus, uint8_t slot, uint8_t func) {
 	//now we add it...
 	i->next = dev;
 	//and done.
+	return;
 };
 
 void pci_check_function(uint8_t bus, uint8_t slot, uint8_t func) {

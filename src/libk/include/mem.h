@@ -14,37 +14,43 @@ extern "C" {
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
-#include <multiboot.h>
+#include <stivale2.h>
 
-//these should be defined globally in boot.S
-//simply because I can't get 'em to work 'ere.
-//they're only here because other functions may depend on them
-extern void  loadPageDirectory(uint32_t*);
-extern void  enablePaging();
-//extern void disablePaging();	this doesn't exist. you can't run away from paging. you either enable it or you don't.
-
-//keep in mind the *address* of these variables indicate the start and end of the kernel.
-extern uint32_t kernel_start;
-extern uint32_t kernel_end;
-
-//the rest is fine though.
+/* 
+ * Loading a Page-Map Level 4 Table is one of the rare things we can't do in C. Because
+ * of this, they are defined in an assembly file. 
+ */
+extern void  loadPML4T(volatile uint64_t*);
 
 
+/* kernel_virt_base + kernel_phys_base == the beginning of the kernel binary. */
+static uint64_t kernel_virt_base = 0xffffffff80000000;
+static uint64_t kernel_phys_base = 0x200000;
 
-//structs and types for paging stuff.
+/* The actual virtual addresses the kernel starts and ends at */
+extern char* kernel_start;
+extern char* kernel_end;
 
+
+
+
+
+//PMM stuff.
 struct memory_block {
-	uint32_t base_page;  	//page number it starts at. Each page is 4KB. to get the address, simply multiply it with 0x1000
-	uint32_t length;		//length in pages.
+	uint64_t base_page;  	//Page number it starts at. Stored as a page number for convenience.
+	uint64_t length;		//Length in pages. Also equal to the amount of pages.
+
 };
 
 
 struct memory_map {
-	struct memory_block blocks[32]; 	//32 blocks at most.
-	uint32_t bitmap[32768];					//bitmap for the entire memory.
-	size_t num_blocks;					//total number of blocks.
+	struct memory_block blocks[32]; 		//32 blocks at most. 
+	uint64_t num_blocks;						//total number of blocks.
+	uint64_t bitmap[98304];					//This is equal to 24 GB
 }; //lists total available physical memory and provides bitmaps for each of them.
 
+typedef struct memory_block memory_block_t;
+typedef struct memory_map memory_map_t;
 
 
 
@@ -52,50 +58,76 @@ struct memory_map {
 
 
 
-struct page_directory {
-	uint32_t dir[1024] __attribute__((aligned(4096))); //at most 1024 entries.
+/* 
+ * VMM.
+ * 
+ * There is only one structure that is used for PD, PDPT and PML4T. 
+ * This is because even though they're supposed to be different things, they all have 
+ * the same structure (512 uint64_t's). And thus, declaring multiple structs is unnecessary,
+ * as they will all contain the same things anyway. This may change later on.
+ */
+struct page_struct {
+	volatile uint64_t entries[512] __attribute__((aligned(4096))); //at most 1024 entries.
 	
-	//this is because we need the physical address a page directory is stored in
-	//if we want to actually *load* the page directory.
-	uint32_t physical_address;
+	/* 
+	 * This stores all the lower-level tables' virtual addresses, so that we can actually
+	 * change them more easily. This is simply not used for a page table, so it has its own struct,
+	 * to avoid wasting memory.
+	 */	
+	void* child[512];
+	
+	/* This is stored here for convenience. */
+	uintptr_t physical_address;
 }	__attribute__((aligned(4096))) __attribute__((packed));
 
 
 
 
+/* Page tables, however, have their own struct. This is simply because they are the lowest
+ * tables in the hierarchy, and thus don't need the lower[] field. 
+ */
+struct page_table {
+	volatile uint64_t entries[512] __attribute__((aligned(4096)));
+	
+	uintptr_t physical_address;
+} __attribute__((aligned(4096))) __attribute__((packed));
 
 
-//for he heap. stores crucial information about a chunk.
+
+
+typedef struct page_table page_table;
+typedef struct page_struct page_dir;
+typedef struct page_struct pd_ptr_table;
+typedef struct page_struct p_map_level4_table;
+
+
+
+/* This struct stores information about a chunk in the heap. */
 struct chunk_header {
-	//first bit of this tells you whether or not it is in use. 1=used, 0=free.
-	//also this is the size of its "data section" and thus excludes the header itself.
-	//meaning you need to do a " + sizeof(chunk_header_t)" to determine the actual size
-	//a chunk occupies.
+	/* This is the size of the chunk's "data section" and thus excludes the header itself.
+	 * That means you need to do a " + sizeof(chunk_header_t)" to determine the actual size
+	 * a chunk occupies, along with its header.
+	 */
 	uint32_t size;	
 	struct chunk_header *prev;
 	struct chunk_header *next;
-	//right here is where the data section of the chunk goes.
-	//simply do a "ptr + sizeof(*ptr)" to get to the data section.
+	/* Right here is where the data section of the chunk goes.
+	 * You can simply do a "ptr + sizeof(*ptr)" to get to the data section.
+	 */
 } __attribute__((packed));
 
 
 
 struct heap {
-	struct chunk_header* first_free;	//point to the first free block.
-	uint32_t min_size;	//minimum size of a chunk. I like to use something like 16.
-	uint32_t start;	//starting address of the heap.
-	uint32_t end;	//ending address of the heap.
+	/* This points to the first free block in the heap. Chunks are in a doubly-linked list.
+	 * Keep in mind that the list excludes used chunks.
+	 */
+	struct chunk_header* first_free;	
+	uint64_t min_size;	//minimum size of a chunk. 
+	uint64_t start;	//starting address of the heap.
+	uint64_t end;	//ending address of the heap.
 };
 
-
-
-
-//now we make types out of these structs.
-typedef struct page_directory page_directory_t;
-
-
-typedef struct memory_block memory_block_t;
-typedef struct memory_map memory_map_t;
 
 typedef struct chunk_header chunk_header_t;
 typedef struct heap heap_t;
@@ -103,39 +135,36 @@ typedef struct heap heap_t;
 
 //generic things.
 memory_map_t* getPhysicalMem();
-page_directory_t* kgetPageDir();
+p_map_level4_table* kgetPML4T();
 heap_t* kgetHeap();		//returns a pointer to kernel's heap.
-uint32_t page_to_addr(uint32_t);	//tells you at which address a page starts. doesn't check the validity of the page.
-uint32_t addr_to_page(uint32_t);	//tells you at which page the address resides in. doesn't check the validity of the address.
-memory_block_t _create_block(uint32_t, uint32_t);	//internal function. creates a block object from address and length.
-
-void initPageDir(page_directory_t*);		//initialises a page directory with its tables. kinda inefficient, might change this later.
-
+uint64_t page_to_addr(uint64_t);	//tells you at which address a page starts. doesn't check the validity of the page.
+uint64_t addr_to_page(uint64_t);	//tells you at which page the address resides in. doesn't check the validity of the address.
+void _create_block(uint64_t, uint64_t, memory_block_t*);	//internal function. creates a block object from address and length.
 
 //Physical memory management.
-uint8_t ispaValid(uint32_t);	//tells whether an address is valid or not.(physical addresses). returns 1 if it is.
-uint8_t isppValid(uint32_t);	//tells you whether or not a physical page number is valid. returns 1 if it is.
-uint8_t isppUsed(uint32_t);	//tells you whether or not a physical page is currently in use.
-uint8_t ispaUsed(uint32_t);//tells you whether or not a physical address is currently in use. 1 = used, 0 = free
+uint8_t ispaValid(uint64_t);	//tells whether an address is valid or not.(physical addresses). returns 1 if it is.
+uint8_t isppValid(uint64_t);	//tells you whether or not a physical page number is valid. returns 1 if it is.
+uint8_t isppUsed(uint64_t);	//tells you whether or not a physical page is currently in use.
+uint8_t ispaUsed(uint64_t);//tells you whether or not a physical address is currently in use. 1 = used, 0 = free
 
-uint8_t setppUsed(uint32_t, uint8_t);		//sets a page's 'used' bit to whatever you pass. 1 = used, 0 = free.
+uint8_t setppUsed(uint64_t, uint8_t);		//sets a page's 'used' bit to whatever you pass. 1 = used, 0 = free.
 
-uint32_t allocpp();		//"allocates" a single physical page.
-uint32_t allocpps(uint32_t);		//"allocates" multiple physical pages..
-uint8_t freepp(uint32_t);			//"frees" a single physical page.
+uint64_t allocpp();		//"allocates" a single physical page.
+uint64_t allocpps(uint64_t);		//"allocates" multiple physical pages..
+uint8_t freepp(uint64_t);			//"frees" a single physical page.
 
 
 
 
 //Virtual memory management
-uint8_t isvpMapped(uint32_t, page_directory_t*);	//tells whether a virtual page is currently mapped (used) in that page_directory.
-uint8_t isvaMapped(uint32_t, page_directory_t*);	//tells whether a virtual address is currently mapped (used) in that page_directory. 
+uint8_t isvpMapped(uint32_t, page_dir*);	//tells whether a virtual page is currently mapped (used) in that page_directory.
+uint8_t isvaMapped(uint32_t, page_dir*);	//tells whether a virtual address is currently mapped (used) in that page_directory. 
 uint32_t findvp();	//finds a free (unmapped) virtual page.
 
-uint8_t mapPage(uint32_t, uint32_t, page_directory_t*);	//maps a single physical page to a virtual page. doesn't check if pp is avilable.
-uint8_t unmapPage(uint32_t, page_directory_t*);	//unmaps a virtual page, also frees the physical page attached to it.
-uint8_t idMapPage(uint32_t, page_directory_t*);	//identity maps a page, if both the physical and the virtual pages are free.
-uint8_t idMapRange(uint32_t, uint32_t, page_directory_t*);	//identity maps a range of pages. checks availability.
+uint8_t map_memory(uint64_t, uint64_t, uint64_t, p_map_level4_table*);	//maps a single physical page to a virtual page. doesn't check if pp is avilable.
+uint8_t unmap_page(uint64_t, uint64_t, p_map_level4_table*);	//unmaps a virtual page, also frees the physical page attached to it.
+uint8_t idMapPage(uint32_t, page_dir*);	//identity maps a page, if both the physical and the virtual pages are free.
+uint8_t idMapRange(uint32_t, uint32_t, page_dir*);	//identity maps a range of pages. checks availability.
 
 uint8_t kpmappv(uint32_t, uint32_t);	//(kernel-side) maps a physical page to a virtual page. uses kernel page directory.
 uint8_t kmmappv(uint32_t, uint32_t);	//(kernel-side) maps a physical address to a virtual one. a wrapper around kpmappv(). not sure about its name.
@@ -152,18 +181,18 @@ uint32_t kpumap(uint32_t);	//unmaps a page from the kernel page directory.
 //Heap (TM) management. (it's kinda trash, but it works okay i guess? though that could be said about everything I write.)
 uint8_t unlink(chunk_header_t*);	//unlinks a chunk from the linked list
 uint8_t link(chunk_header_t*, chunk_header_t*);	//links two chunks to each other.
-void* kmalloc(uint32_t);
+void* kmalloc(uint64_t);
 uint8_t kfree(void*);
 
 
 
 //these  functions simply initalise different layers of the Memory Manager (TM)
-uint8_t init_pmm(struct multiboot_header*);		//Physical Memory Manager (TM)
+uint8_t init_pmm(struct stivale2_struct_tag_memmap*);		//Physical Memory Manager (TM)
 uint8_t init_vmm();								//Virtual  Memory Manager (TM)
 uint8_t init_heap();							//Heap			  Manager (TM)
 
 //initialises everything (a.k.a. calls the three functions declared above.)
-uint8_t init_memory(struct multiboot_header*);	
+uint8_t init_memory(struct stivale2_struct_tag_memmap*);	
 
 
 

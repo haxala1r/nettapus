@@ -40,7 +40,7 @@ struct file_vnode {
 	struct file_system* fs;
 	char* file_name;
 	uint16_t stream_count;		//amount of streams open for this file.
-	uint32_t size;		//the file's size, in bytes.
+	uint64_t size;		//the file's size, in bytes.
 	
 	
 	struct file_vnode* next;	//these are kept in a linked list.
@@ -63,7 +63,7 @@ struct file_s {
 	
 	int32_t file_des;	//file descriptor.
 
-	uint32_t position;		//where exactly we are on the file.
+	uint64_t position;		//where exactly we are on the file.
 	uint8_t mode;	//read/write. 0 = read, any other value = write.
 	uint8_t flags;	//currently unused.
 	
@@ -101,10 +101,10 @@ int32_t kopen(char*, uint8_t);
 
 int32_t kclose(int32_t);
 
-int32_t kread(int32_t, void*, uint32_t);
-int32_t kwrite(int32_t, void*, uint32_t);
+int32_t kread(int32_t, void*, uint64_t);
+int32_t kwrite(int32_t, void*, uint64_t);
 
-int32_t kseek(int32_t, uint32_t);
+int32_t kseek(int32_t, uint64_t);
 
 
 

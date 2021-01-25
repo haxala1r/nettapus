@@ -79,24 +79,26 @@ uint8_t fs_write_sectors(file_system_t* fs, uint32_t lba, uint32_t sector_count,
 		
 		
 	} else  {
-		//we need to do it in multiple batches.
+		/* We need to do multiple accesses. */
 		
-		//this is the maximum amount of sectors we can access at a time. The loop below
-		//will 
+		/* This is the maximum amount of sectors we can access at a time. */
 		size_t i = 255;
-		uint8_t* i_buf = (uint8_t*)buf;	//iterator pointer to be able to read conveniently without losing our pointer.
+		
+		/* This is an iterator pointer to be able to read conveniently without losing our place. */
+		uint8_t* i_buf = (uint8_t*)buf;	
+		
 		while (sector_count) {
 			if (sector_count < 255) {
 				i = sector_count;
 			}
 			
 			if (ide_pio_write28(fs->drive_id, fs->starting_sector + lba, (uint8_t)i, (uint16_t*)i_buf)) {
-				return 1;		//an error occured.
+				return 1;		
 			}
 			
 			sector_count -= i;
 			lba += i;			
-			i_buf += i * 512;	//this is the reason we declared i_buf.
+			i_buf += i * 512;	/* The reason i_buf was declared. */
 		}
 	}
 	
@@ -106,62 +108,26 @@ uint8_t fs_write_sectors(file_system_t* fs, uint32_t lba, uint32_t sector_count,
 
 
 uint8_t fs_read_bytes(file_system_t* fs, void* buf, uint32_t sector, uint16_t offset, uint32_t bytes) {
-	//this function provides a relatively simple interface to read a non-sector-aligned
-	//block of data.
-	//fs is the file system to be read from.
-	//buf is the buffer data will be copied to.
-	//sector is the LBA to start reading from.
-	//offset is where on the sector you want to read from. (uint16_t because "offset < 512" must be true anyway.)
-	//bytes is the amount of bytes to read.
+	/* This function reads {bytes} to {buf} from {fs} at {sector} at offset. */
 	
 	//making sure that the values are correctly written in their respective places. 
 	sector += offset / 512;
 	offset %= 512;
 	
-	//how many sectors in total we need to read from the disk.
-	//The formula is a bit arcane, I apologize for that.
-	//What? you're still upset? Too bad!
+	/* How many sectors in total need to be read. The formula is a bit arcane, and I
+	 * apologise for that. Unfortunately though, I can't think of a way to present this
+	 * without boring everyone too much.
+	 */
 	uint32_t sector_count = (bytes / 512) + ((bytes % 512) + 511)/512 + 1;
 	
 	
 	//temporary buffer, because we need to read from the middle of the disk.
 	uint8_t* temp_buf = kmalloc(sector_count * 512);
 	
-	//this is for the IDE driver.
-	if (sector_count == 256) {
-		sector_count = 0;
+	
+	if (fs_read_sectors(fs, sector, sector_count, temp_buf)) {
+		return 1;
 	}
-	
-	
-	//now we need to perform the disk access.
-	if (sector_count < 256) {
-		//no need to break down the amount of sectors to read.
-		if (fs_read_sectors(fs, sector, sector_count, temp_buf)) {
-			kfree(temp_buf);
-			return 1;		//an error occured.
-		}
-		
-		
-	} else  {
-		//we need to do it in multiple stages.
-		
-		size_t i = 255;
-		uint8_t* i_buf = temp_buf;	//iterator pointer to be able to read conveniently without losing our pointer.
-		while (sector_count) {
-			if (sector_count < 255) {
-				i = sector_count;
-			}
-			
-			if (fs_read_sectors(fs, sector, i, i_buf)) {
-				kfree(temp_buf);
-				return 1;		//an error occured.
-			}
-			
-			sector_count -= i;
-			i_buf += i * 512;
-		}
-	}
-	
 	
 	
 	//now we just need to copy the data to where it belongs, and it is done.
@@ -408,12 +374,12 @@ uint8_t fs_init() {
 		i = i->next;
 	}
 	kfree(buf);
-	if (root_fs) {
-		return ret_code;
+	if (root_fs == NULL) {
+		return ++ret_code;
 	}
 	if (root_fs->fs_type == 0xFF) {
 		return 0xFF;
 	}
-	return ++ret_code;
+	return ret_code;
 }
 

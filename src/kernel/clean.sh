@@ -1,7 +1,7 @@
 
 
-rm "boot.o"
+rm "asm.o"
 rm "kernel.o"
-rm "${SYSROOT}${BOOTDIR}/kernel.bin"
+rm "${SYSROOT}${BOOTDIR}/kernel.elf"
 
  

@@ -1,10 +1,4 @@
 #!/bin/sh
+#this shell script runs the OS on QEMU. That's all it does. What did you expect?
 
-#this shell script basically runs the OS on QEMU. That's all it does.
-
-
-
-qemu-system-i386 -drive file=disk.img,format=raw 
-
-
-
+qemu-system-x86_64 -drive file=disk.img,format=raw -cpu qemu64 -m 1G
