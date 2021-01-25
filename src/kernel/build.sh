@@ -4,7 +4,7 @@ echo "[/kernel/build.sh] building kernel..."
 
 #the compiler and the linker we will use.
 CCtemp="${CC} -ffreestanding ${CFLAGS} "
-KLINKER="${CC} -ffreestanding -lgcc -O0 -nostdinc  -nostdlib -no-pie -static -mcmodel=kernel -z max-page-size=0x1000"
+KLINKER="${CC} -ffreestanding -lgcc  -nostdinc  -nostdlib -no-pie -static -mcmodel=kernel -z max-page-size=0x1000"
 
 #compile the kernel.
 ${CCtemp} -c "${SOURCEDIR}${KERNELDIR}/kernel.c" -o "${SOURCEDIR}${KERNELDIR}/kernel.o" --sysroot="${SOURCEDIR}" -isystem="${LIBK}/include"

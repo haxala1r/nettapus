@@ -2,12 +2,7 @@
 #include <stdint.h>
 #include <vga.h>
 
-uint64_t FB_ADDR;
-uint32_t* FB;
-uint64_t FB_width	= 0;	/* Amount of columns on the screen. 	*/
-uint64_t FB_height 	= 0;	/* Amount of rows on the screen.     	*/
-uint64_t FB_bpp		= 0;	/* How many bits to go one pixel right	*/
-uint64_t FB_pitch	= 0;	/* How many bytes to go one pixel down	*/
+
 
 
 void vga_fill_screen(uint32_t color) {
@@ -31,7 +26,7 @@ uint8_t vga_init(uintptr_t fb_addr, uint64_t fb_width, uint64_t fb_height, uint6
 	
 	FB = (uint32_t*) FB_ADDR;
 	
-	vga_fill_screen(0xFFFFFFFF);
+	vga_fill_screen(0);
 	
 	return 0;
 };

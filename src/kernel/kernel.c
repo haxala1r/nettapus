@@ -31,6 +31,8 @@
 #include <fs/fs.h>
 #include <string.h>
 #include <vga.h>
+#include <tty.h>
+
 extern char kernel_b[];
 
 
@@ -131,9 +133,20 @@ void _start(struct stivale2_struct *hdr) {
 		while (1) { asm volatile("hlt;"); };
 	}
 	
+	if (tty_init("fonts/lat9-08.psf")) {
+		vga_fill_screen(0xFFFF00);
+		while (1) { asm volatile("hlt;"); };
+	}
 	
+	kputs("Hello, VGA world!\n");
 	
+	int32_t fd = kopen("hello.txt", 0);
+	char *buf = kmalloc(32);
+	memset(buf, 0, 32);
 	
+	kread(fd, buf, 18);
+	
+	kputs(buf);
 	
 	while (1) {
 		asm ("hlt;");

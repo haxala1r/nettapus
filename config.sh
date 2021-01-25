@@ -13,7 +13,7 @@ export LD="${TARGET}-ld"
 
 
 
-export CFLAGS=" -Og -g -std=gnu99 -Wall -Wextra -mcmodel=large -fno-pic -fno-stack-protector -mno-red-zone"
+export CFLAGS=" -Og -std=gnu99 -Wall -Wextra -mcmodel=large -fno-pic -fno-stack-protector -mno-red-zone"
 
 #uncomment this while debugging.
 #CFLAGS="${CFLAGS} -DDEBUG"
