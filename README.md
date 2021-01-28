@@ -47,11 +47,7 @@ Here are some things that have yet to be done:
 	- Add USB support.
 	- Add keyboard support.
 	
-	
-	- Add support for another file system, because Tar doesn't count.
-	- Refactor a huge chunk of the VFS, and adapt it to 64-bits.
-	
-	- Add UEFI support. I have experimented with this and it works -- but it will only be done after proper VGA support is made.
+	- Add UEFI support. I have experimented with this and it works -- just have to make the scripts.
 	- Add GPT support (instead of the traditional MBR).
 
 # Dones
@@ -62,12 +58,10 @@ Here are some things from the above list that have been completed:
 	- Set up paging.
 	- Added a proper memory manager, as well as a heap. 
 	- Added support for at least one filesystem. (TAR)
-	
+	- Added FAT16 support.
 	- Added PCI support. 
 	- Added an ATA PIO driver. 
-	
-	- Added proper file abstraction.
-	
+	- Added proper file abstraction.	
 	- Added proper VGA support.
 
 
