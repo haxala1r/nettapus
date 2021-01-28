@@ -13,10 +13,10 @@ export LD="${TARGET}-ld"
 
 
 
-export CFLAGS=" -Og -std=gnu99 -Wall -Wextra -mcmodel=large -fno-pic -fno-stack-protector -mno-red-zone"
+export CFLAGS=" -O2 -std=gnu99 -Wall -Wextra -mcmodel=large -fno-pic -fno-stack-protector -mno-red-zone"
 
 #uncomment this while debugging.
-#CFLAGS="${CFLAGS} -DDEBUG"
+CFLAGS="${CFLAGS} -DDEBUG"
 
 
 export SYSROOT="${PWD}/root"

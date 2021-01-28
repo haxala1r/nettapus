@@ -23,9 +23,10 @@ struct PS_font {
 	uint32_t width;
 } __attribute__((packed));
 
-
+void kput_data(char*, uint64_t);
 void kputs(char*);
 void kputs_color(char*, uint32_t, uint32_t);
+void kputx(uint64_t);
 
 uint8_t tty_init(char*);
 

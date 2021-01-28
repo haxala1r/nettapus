@@ -154,7 +154,7 @@ chunk_header_t* mergeChunk(chunk_header_t *h1, chunk_header_t *h2) {
 
 
 
-
+#include <tty.h>
 /* Now comes the legendary malloc and free! */
 void *kmalloc(uint64_t bytes) {
 	if (bytes == 0) {
@@ -168,6 +168,7 @@ void *kmalloc(uint64_t bytes) {
 	
 	heap_t *hp = kgetHeap();
 	chunk_header_t *chunk = hp->first_free;
+	
 	
 	while (chunk != NULL) {
 		if (chunk->size < bytes) {
@@ -194,7 +195,7 @@ void *kmalloc(uint64_t bytes) {
 			 * I should probably change this to a more clever algorithm,
 			 * but for now this should suffice.
 			 */
-			if ((chunk->size - bytes) >= 32) {
+			if ((chunk->size - bytes) > 32) {
 				/* if difference >= 32, chop the chunk to be as big as requested,
 				 * then return it.
 				 */
@@ -212,18 +213,20 @@ void *kmalloc(uint64_t bytes) {
 				
 				return (void*)(((uintptr_t)chunk) + sizeof(chunk_header_t));
 				
-			} else {
-				/* If the difference isn't that big, just return the chunk without chopping.*/
-				
-				if (chunk == hp->first_free) {
-					hp->first_free = chunk->next;
-				}
-				unlink(chunk);
-				return (void*)(((uintptr_t)chunk) + sizeof(chunk_header_t));
+			} 
+			/* If the difference isn't that big, just return the chunk without chopping.*/
+			
+			if (chunk == hp->first_free) {
+				hp->first_free = chunk->next;
 			}
+			unlink(chunk);
+				
+			return (void*)(((uintptr_t)chunk) + sizeof(chunk_header_t));
+			
 			
 		}
 	}
+	kputs("\nFUCK BITH13\n");
 	/* No chunks left. */
 	return NULL;
 }
@@ -266,6 +269,7 @@ uint8_t kfree(void *ptr) {
 	while (1) {
 		if (i == NULL) {
 			//if it reaches here, then dafuq?
+			kputs("\nFUCK BITH15\n");
 			return 1;	//might use a more descriptive error.
 		}
 		if (j == NULL) {
@@ -311,6 +315,7 @@ uint8_t kfree(void *ptr) {
 		i = j;
 		j = j->next;
 	}
+	
 	return 1;	
 }
 
@@ -396,24 +401,18 @@ uint8_t init_heap(void) {
 void heap_print_state(void) {
 	heap_t* hp = kgetHeap();
 	
-	char str[16] = {};
 	chunk_header_t* i = hp->first_free;
 	
-	terminal_puts("\nHEAP STATE:\n");
-	terminal_puts("{address}   {size}\n");
+	kputs("\nHEAP STATE:\n");
+	kputs("{address}   {size}\n");
 	
 	while (i) {
 		
-		xtoa((uint32_t)i, str);
-		terminal_puts(str);
-		terminal_puts("   ");
+		kputx((uint64_t)i);
+		kputs("   ");
 		
-		xtoa(i->size, str);
-		terminal_puts(str);
-		terminal_putc('\n');
-		
-		
-		
+		kputx(i->size);
+		kputs("\n");
 		
 		i = i->next;
 	}

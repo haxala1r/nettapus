@@ -115,7 +115,6 @@ void pci_reg_device(uint8_t bus, uint8_t slot, uint8_t func) {
 	dev->subclass_code = pci_get_subclass_code(address);
 	dev->prog_if = pci_get_prog_if(address);
 	dev->revision_id = (pci_read_field(address, 8) & 0xFF);
-	dev->bar0 = pci_read_field(address, 10);
 	dev->next = NULL;
 	
 	//let us do the 'bar's now.
@@ -214,6 +213,34 @@ uint8_t pci_scan_all_buses() {
 	}
 	
 };
+
+
+
+
+
+#ifdef DEBUG
+#include <tty.h>
+#include <string.h>
+void pci_print_devs() {
+	kputs("\nPCI devices: {Device ID} {Vendor ID} {Class code} {Subclass code} {Prog IF}\n");
+	pci_device_t *i = pci_first_device;
+	
+	while (i) {
+		kputx(i->device_id);
+		kputs(" ");
+		kputx(i->vendor_id);
+		kputs(" ");
+		kputx(i->class_code);
+		kputs(" ");
+		kputx(i->subclass_code);
+		kputs(" ");
+		kputx(i->prog_if);
+		kputs("\n");
+		i = i->next;
+	}
+};
+
+#endif
 
 
 

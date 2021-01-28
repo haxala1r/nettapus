@@ -108,11 +108,12 @@ uint8_t map_memory(uint64_t pa, uint64_t va, uint64_t amount, p_map_level4_table
 	 * Truth is, it is not supposed to do any of those things. This function only does what
 	 * it's supposed to do. And because of that, generally, you want to use some of the other
 	 * functions.
+	 * 
+	 * Also a note: Currently this function (if it can't find the necessary PDPT/PD/PT in place)
+	 * allocates *MORE* page structs for that pml4t. This will most likely change in the future,
+	 * but currently this is the case.
 	 */
-	/* TODO: Add some logic to allocate memory *for* the page structures, so that
-	 * the caller does not have to do that every time. 
-	 * It might be a good idea to reserve a specific part of memory for that.
-	 */
+	
 
 	 
 	if (pml4t == NULL) {
@@ -211,6 +212,8 @@ uint8_t unmap_memory(uint64_t va, uint64_t amount, p_map_level4_table* pml4t) {
 	 * This function unmaps virtual pages. 
 	 * It works with the same logic as map_memory, except instead of setting the entry
 	 * to physical address ORed with 3, it sets the entry to 0.
+	 * 
+	 * Also, it doesn't allocate any more memory for the page structs.
 	 */
 	 if (pml4t == NULL) {
 		return 1;	
@@ -284,19 +287,19 @@ uint8_t init_vmm(void) {
 	 * Set up the tables, and also record their physical addresses. 
 	 * Divide kernel_virt_base by 8 because a single entry occupies 8 bytes.
 	 */
-	kpml4.physical_address			= (uintptr_t)((char*)kpml4.entries        - kernel_virt_base);
-	kpml4.entries[511] 				= (uint64_t)((char*)k_first_pdpt.entries   - kernel_virt_base) | 2 | 1;
+	kpml4.physical_address			= (uintptr_t)kpml4.entries - kernel_virt_base;
+	kpml4.entries[511] 				= ((uint64_t)k_first_pdpt.entries   - kernel_virt_base) | 2 | 1;
 	
-	k_first_pdpt.physical_address 	= (uintptr_t)((char*)k_first_pdpt.entries  - kernel_virt_base);
-	k_first_pdpt.entries[510] 		= (uint64_t)((char*)k_first_pd.entries     - kernel_virt_base) | 2 | 1; 
+	k_first_pdpt.physical_address 	= (uintptr_t)k_first_pdpt.entries  - kernel_virt_base;
+	k_first_pdpt.entries[510] 		= ((uint64_t)k_first_pd.entries     - kernel_virt_base) | 2 | 1; 
 	
-	k_first_pd.physical_address		= (uintptr_t)((char*)k_first_pd.entries    - kernel_virt_base); 
-	k_first_pd.entries[0] 			= (uint64_t)((char*)k_first_table.entries  - kernel_virt_base) | 2 | 1; 
-	k_first_pd.entries[1] 			= (uint64_t)((char*)k_sec_table.entries  - kernel_virt_base) | 2 | 1; 
+	k_first_pd.physical_address		= (uintptr_t)k_first_pd.entries    - kernel_virt_base; 
+	k_first_pd.entries[0] 			= ((uint64_t)k_first_table.entries  - kernel_virt_base) | 2 | 1; 
+	k_first_pd.entries[1] 			= ((uint64_t)k_sec_table.entries  - kernel_virt_base) | 2 | 1; 
 	
 	
-	k_first_table.physical_address	= (uintptr_t)((char*)k_first_table.entries - kernel_virt_base);
-	k_sec_table.physical_address	= (uintptr_t)((char*)k_sec_table.entries - kernel_virt_base);
+	k_first_table.physical_address	= (uintptr_t)k_first_table.entries - kernel_virt_base;
+	k_sec_table.physical_address	= (uintptr_t)k_sec_table.entries - kernel_virt_base;
 	
 	/* Map the pages the kernel is on. */
 	if (map_memory(kernel_phys_base, kernel_virt_base + kernel_phys_base, 0x200, &kpml4)) {

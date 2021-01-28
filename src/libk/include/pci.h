@@ -44,7 +44,11 @@ pci_device_t* pci_get_first_dev();	//gets you the first device in the linked lis
 
 
 
+#ifdef DEBUG
 
+void pci_print_devs();
+
+#endif
 
 #ifdef __cplusplus
 }

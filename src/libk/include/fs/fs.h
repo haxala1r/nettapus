@@ -11,7 +11,7 @@ extern "C" {
 
 //filesystem types.
 #define FS_USTAR 	0
-//#define FS_FAT16 	1
+#define FS_FAT16 	1
 //#define FS_FAT32 	2
 #define FS_UNKNOWN 	0xFF
 
@@ -23,8 +23,8 @@ struct file_system {
 	//info needed in order to access the system.
 	uint16_t drive_id;
 	
-	uint32_t starting_sector;	//the LBA number the filesystem/partition starts at.
-	uint32_t sector_count;		//The amount of sectors this filesystem contains.
+	uint64_t starting_sector;	//the LBA number the filesystem/partition starts at.
+	uint64_t sector_count;		//The amount of sectors this filesystem contains.
 	
 	struct file_system* next;	//linked list.
 	
@@ -37,18 +37,19 @@ struct file_system {
 
 //this holds a file's relevant info, from the point of view of the VFS.
 struct file_vnode {
-	struct file_system* fs;
-	char* file_name;
+	struct file_system *fs;
+	char *file_name;
 	uint16_t stream_count;		//amount of streams open for this file.
 	uint64_t size;		//the file's size, in bytes.
 	
 	
-	struct file_vnode* next;	//these are kept in a linked list.
-	
+	/* The vnodes are all kept in a doubly-linked list. */
+	struct file_vnode *next;	
+	struct file_vnode *prev;
 	//This should point to FS-specific info for the file. Things like where the meta-data
 	//of said file is, where the actual data starts from, how big the file is,
 	//and everything else that might be necessary.
-	void* special;	
+	void *special;	
 };
 
 
@@ -59,16 +60,27 @@ struct file_vnode {
 //this structure can easily be ported over to the userspace, when the time comes.
 
 struct file_s {
-	struct file_vnode* node;		//the vnode it refers to.
+	/* The vnode that keeps relevant info on the file. */
+	struct file_vnode* node;		
 	
-	int32_t file_des;	//file descriptor.
+	/* The file descriptor used to access this struct. */
+	int32_t file_des;	
 
-	uint64_t position;		//where exactly we are on the file.
-	uint8_t mode;	//read/write. 0 = read, any other value = write.
-	uint8_t flags;	//currently unused.
+	/* Where exactly, e.g. a kread() call will start reading from. */
+	uint64_t position;
 	
-	struct file_s* next;
-};
+	/* Read/Write. 0 = Read, 1 = Write. */		
+	uint8_t mode;	
+	
+	/* This is currently unused. */
+	uint8_t flags;	
+	
+	/* The file structs are always kept in a doubly linked list for that process.
+	 * This list will exist in the process struct when I get that far. 
+	 */
+	struct file_s *next;
+	struct file_s *prev;
+} __attribute__((packed));
 
 
 typedef struct file_system file_system_t;
@@ -82,8 +94,8 @@ typedef struct file_s FILE;
 
 
 
-uint8_t fs_read_sectors(file_system_t*, uint32_t, uint32_t, void*);
-uint8_t fs_write_sectors(file_system_t*, uint32_t, uint32_t, void*);
+uint8_t fs_read_sectors(file_system_t*, uint64_t, uint32_t, void*);
+uint8_t fs_write_sectors(file_system_t*, uint64_t, uint32_t, void*);
 
 uint8_t fs_read_bytes(file_system_t*, void*, uint32_t, uint16_t, uint32_t);
 uint8_t fs_write_bytes(file_system_t*, void*, uint32_t, uint16_t, uint32_t);
@@ -116,6 +128,8 @@ uint8_t fs_init();
 
 
 #ifdef DEBUG
+
+void fs_print_state();
 
 void vfs_print_state(void);
 void vfs_print_nodes(void);

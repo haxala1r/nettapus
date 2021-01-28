@@ -14,12 +14,12 @@ char xbtoa(uint8_t val) {
 	return 0;
 }
 //hex to ascii
-void xtoa(uint32_t val, char* buf) {
+void xtoa(uint64_t val, char* buf) {
 	buf[0] = '0';
 	buf[1] = 'x';
-	for (uint8_t i = 0; i < 8; i++) {
+	for (uint8_t i = 0; i < 16; i++) {
 		uint8_t tempval = (val >> (i * 4)) & (0xF);
-		buf[9-i] = xbtoa((uint8_t)tempval);
+		buf[17-i] = xbtoa((uint8_t)tempval);
 	}
 	
 }

@@ -138,7 +138,6 @@ uint8_t ustar_read_file(file_system_t* fs, USTAR_FILE_t* file, void* buf, uint32
 	return 0;
 };
 
-
 uint8_t ustar_write_file(file_system_t* fs, USTAR_FILE_t* file, void* buf, uint32_t offset, uint32_t bytes) {
 	/* This function writes bytes from buf to file on fs, at offset. */
 	
@@ -159,7 +158,7 @@ uint8_t ustar_write_file(file_system_t* fs, USTAR_FILE_t* file, void* buf, uint3
 	starting_sector += offset / 512;
 	
 	
-	
+
 	/* Perform the disk access. */
 	if (fs_write_bytes(fs, buf, starting_sector, offset % 512, bytes)) {
 		return 1;	//an error.
@@ -314,7 +313,7 @@ uint8_t ustar_enlarge_file(file_system_t* fs, USTAR_FILE_t* file, uint32_t bytes
 			
 			
 			
-	kfree(buf);
+
 	return 0;
 };
 

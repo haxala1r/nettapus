@@ -35,181 +35,14 @@ ide_drive_t* ide_find_drive(uint16_t drive_id) {
 };
 
 
-uint8_t ide_pio_poll(uint16_t port) {
-	//Poll until data is available.
-	//a return of 1 means error, and 0 means success.
-	
-	
-	uint8_t stat = inb(port + 7);
-	
-	while (1) {
-		stat = inb(port + 7);
-		if ((stat & 1) || (stat & 0x20)) {
-			return 1;	//an error bit is set.
-		}
-		
-		if (((stat & 0x80) == 0) && (stat & 8)) {
-			//BSY clear and DRQ is set -- data is ready.
-			return 0;
-		}
-		
-	}
-	
-};
-
-
-uint8_t ide_pio_read28(uint16_t drive_id, uint32_t starting_lba, uint8_t sector_count, uint16_t* buf) {
-	//Does an ATA PIO read for given drive.
-	//buf is assumed to be large enough to hold the data.
-	
-	ide_drive_t* drive = ide_find_drive(drive_id);
-	if (drive == NULL) {
-		return 1;	//error. Obviously.
-	}
-	if (buf == NULL) {
-		return 1;
-	}
-	if (drive->lba28_sectors == 0) {
-		return 1;	//drive does not support lba28.
-	}
-	
-	
-	uint16_t count_w = sector_count;
-	if (count_w == 0) {
-		count_w = 256;	//we're going to use this to loop.
-	}
-	
-	
-	//Drive, OR'ed with highest 4 bits of starting_lba
-	outb(drive->io_port_base + 6, (uint8_t)(0xE0 | (drive->slave << 4) | ((starting_lba >> 24) & 0x0F)) );
-	
-	//sectorcount
-	outb(drive->io_port_base + 2, sector_count);
-	
-	//low eight bits of lba
-	outb(drive->io_port_base + 3, (uint8_t)starting_lba & 0xFF);
-	
-	//next eight bits
-	outb(drive->io_port_base + 4, (uint8_t)(starting_lba >> 8) & 0xFF);
-	
-	//and the next eight bits.
-	outb(drive->io_port_base + 5, (uint8_t)(starting_lba >> 16) & 0xFF);
-	
-	//now the command
-	outb(drive->io_port_base + 7, 0x20);
-	
-	while (!(inb(drive->io_port_base + 7) | 0x40)) {
-		;
-	}
-	
-	for (uint16_t i = 0; i < count_w; i++) {
-		
-		
-		
-		//now we poll.
-		if (ide_pio_poll(drive->io_port_base)) {
-			//we reach here if an error occurs.
-			//not much we can do, so let's just return an error.
-			return 1;
-		}
-		
-		//data should be ready.
-		for (uint16_t j = 0; j < 256; j++) {
-			buf[i * 256 + j] = inw(drive->io_port_base);
-		}
-		
-		inb(drive->io_port_base + 7);
-		inb(drive->io_port_base + 7);
-		inb(drive->io_port_base + 7);
-		inb(drive->io_port_base + 7);
-	
-		
-	}
-	
-	return 0;	//Success!
-};
-
-
-uint8_t ide_pio_write28(uint16_t drive_id, uint32_t starting_lba, uint8_t sector_count, uint16_t* buf) {
-	//Does an ATA PIO read on the given disk.
-	//buf is assumed to hold the data that will be written.
-	
-	ide_drive_t* drive = ide_find_drive(drive_id);
-	if (drive == NULL) {
-		return 1;	//can't write if there's no drive.
-	}
-	if (buf == NULL) {
-		return 1;
-	}
-	if (drive->lba28_sectors == 0) {
-		return 1;	//drive does not support lba28.
-	}
-	
-		
-	uint16_t count_w = sector_count;
-	if (count_w == 0) {
-		count_w = 256;	//we're going to use this to loop.
-	}
-	
-	
-	//Drive, OR'ed with highest 4 bits of starting_lba
-	outb(drive->io_port_base + 6, (uint8_t)(0xE0 | (drive->slave << 4) | ((starting_lba >> 24) & 0x0F)) );
-	
-	//sectorcount
-	outb(drive->io_port_base + 2, sector_count);
-	
-	//low eight bits of lba
-	outb(drive->io_port_base + 3, (uint8_t)starting_lba & 0xFF);
-	
-	//next eight bits
-	outb(drive->io_port_base + 4, (uint8_t)(starting_lba >> 8) & 0xFF);
-	
-	//and the next eight bits.
-	outb(drive->io_port_base + 5, (uint8_t)(starting_lba >> 16) & 0xFF);
-	
-	//now the command
-	outb(drive->io_port_base + 7, 0x30);
-	
-	
-	
-	for (uint16_t i = 0; i < count_w; i++) {
-		//now we poll.
-		if (ide_pio_poll(drive->io_port_base)) {
-			//we reach here if an error occurs.
-			//not much we can do, so let's just return an error.
-			return 1;
-		}
-		
-		//data should be ready.
-		for (uint16_t j = 0; j < 256; j++) {
-			outw(drive->io_port_base, buf[i * 256 + j]);
-			
-		}
-		
-		inb(drive->io_port_base + 7);
-		inb(drive->io_port_base + 7);
-		inb(drive->io_port_base + 7);
-		inb(drive->io_port_base + 7);
-	
-		
-	}
-	//we need to do a cache flush, since the command should be complete now.
-	outb(drive->io_port_base + 7, 0xE7);
-	
-	while (inb(drive->io_port_base + 7) & 0x80) {
-		;	//wait until BSY clears.
-	}
-	
-	//we should be done!
-	return 0;
-};
 
 //info gathering functions.
 
 uint8_t ide_identify_noid(uint16_t io_base, uint8_t slave, uint16_t* buf) {
-	//executes an identify command. Doesn't use an ID because this is 
-	//supposed to be used before the list is set up.
-	//returns 0 on success. 1 otherwise.
+	/* Executes an identify command. Doesn't use an ID because this is 
+	 * only supposed to check whether the disk exists or not.
+	 * Returns 0 if disk exists, 1 otherwise.
+	 */
 	
 	outb(io_base + 6, 0xA0 | (slave << 4));
 	outb(io_base + 2, 0);
@@ -220,47 +53,45 @@ uint8_t ide_identify_noid(uint16_t io_base, uint8_t slave, uint16_t* buf) {
 	outb(io_base + 7, 0xEC);
 	
 	if (inb(io_base + 7) == 0) {
-		//the drive does not exist.
-		return 1;	//error.
+		return 1;	 /* Drive does not exist. */
 	}
 	
-	//we gotta poll a bit.
+	/* We need to poll until BSY clears. */
 	while (1) {
 		uint8_t stat = inb(io_base + 7);
+		
 		if (stat & 0x80) {
-			//BSY set, continue until it clears.
 			continue;
 		}
-		break;	//BSY clear, stop polling.
+		
+		break;
 	}
 	
 	
 	
-	//check lbamid and lbahi.
+	/* Now check lbamid and lbahi */
 	if ((inb(io_base + 4) != 0) || (inb(io_base + 5) != 0)) {
-		//if these are non-zero, the drive is not ATA.
-		//If I ever add support for ATAPI and SATA, this is where the code should go for them.
+		/* İf either of these are non-zero, then the drive is not IDE. */
 		return 1;
 	}
 	
 	
 	
-	//otherwise, we poll some more.
 	
+	/* Now we need to poll until either DRQ or ERR is set.*/
 	while (1) {
 		uint8_t stat = inb(io_base + 7);
 		if (stat & 8) {
-			//DRQ is set, meaning we should stop polling.
-			break;
+			break;		/* DRQ set. */
 		}
 		if (stat & 1) {
-			return 1;	//ERR is set.
+			return 1;	/* ERR set.*/
 		}
 	}
 	
 	
 	
-	//if we're here, that means the drive is ATA and we can extract the info.
+	/* Once we reach here, it is certain the drive is IDE and we can extract info. */
 	if (buf != NULL) {
 		for (size_t i = 0; i < 256; i++) {
 			buf[i] = inw(io_base);
@@ -274,7 +105,7 @@ uint8_t ide_identify_noid(uint16_t io_base, uint8_t slave, uint16_t* buf) {
 };
 
 
-void ide_register_disk(	uint16_t id, uint16_t io, uint16_t control, uint8_t slave, uint32_t max_lba28) {
+void ide_register_disk(	uint16_t id, uint16_t io, uint16_t control, uint8_t slave, uint32_t max_lba28, uint64_t max_lba48) {
 	
 	/* 
 	 * this adds a disk to the list, and if that disk already exists, refreshes its data.
@@ -287,6 +118,7 @@ void ide_register_disk(	uint16_t id, uint16_t io, uint16_t control, uint8_t slav
 	ndrive->control_port_base = control;
 	ndrive->slave = slave;
 	ndrive->lba28_sectors = max_lba28;
+	ndrive->lba48_sectors = max_lba48;
 	ndrive->next = NULL;
 	 
 	//if no drives exist yet, simply add it.
@@ -363,12 +195,18 @@ void ide_refresh_disks() {
 			continue;	//there are no drives on this bus.
 		}
 		
+		/* Sorry for the long lines. The compiler wouldn't let me divide these into different
+		 * lines via variables (it randomly crashed when I attempted that.)
+		 * The lengthy parts are the shifts necessary to assemble the maximum lba28 and lba48
+		 * (respectively) addressable sectors.
+		 */
+		
 		//check and register drives.
 		if (!ide_identify_noid(ibus->io_base, 0, buf)) {
-			ide_register_disk(i * 4, ibus->io_base, ibus->control_base, 0, buf[60] | (buf[61] << 16));
+			ide_register_disk(i * 4, ibus->io_base, ibus->control_base, 0, buf[60] | (buf[61] << 16), (buf[100]) | (buf[101] << 16) | ((uint64_t)buf[102] << 32) | ((uint64_t)buf[103] << 48));
 		}
 		if (!ide_identify_noid(ibus->io_base, 1, buf)) {
-			ide_register_disk(i * 4 + 1, ibus->io_base, ibus->control_base, 1, buf[60] | (buf[61] << 16));
+			ide_register_disk(i * 4 + 1, ibus->io_base, ibus->control_base, 1, buf[60] | (buf[61] << 16), (buf[100]) | (buf[101] << 16) | ((uint64_t)buf[102] << 32) | ((uint64_t)buf[103] << 48 ));
 		}
 		
 		
@@ -379,10 +217,10 @@ void ide_refresh_disks() {
 		
 		//check and register drives.
 		if (!ide_identify_noid(ibus->secondary_io_base, 0, buf)) {
-			ide_register_disk(i * 4 + 2, ibus->secondary_io_base, ibus->secondary_control_base, 0, buf[60] | (buf[61] << 16));
+			ide_register_disk(i * 4 + 2, ibus->secondary_io_base, ibus->secondary_control_base, 0, buf[60] | (buf[61] << 16), (buf[100]) | (buf[101] << 16) | ((uint64_t)buf[102] << 32) | ((uint64_t)buf[103] << 48 ));
 		}
 		if (!ide_identify_noid(ibus->secondary_io_base, 1, buf)) {
-			ide_register_disk(i * 4 + 3, ibus->secondary_io_base, ibus->secondary_control_base, 1, buf[60] | (buf[61] << 16));
+			ide_register_disk(i * 4 + 3, ibus->secondary_io_base, ibus->secondary_control_base, 1, buf[60] | (buf[61] << 16), (buf[100]) | (buf[101] << 16) | ((uint64_t)buf[102] << 32) | ((uint64_t)buf[103] << 48 ));
 		}
 		
 		
@@ -434,6 +272,17 @@ void ide_register_bus(pci_device_t* bus) {
 	} else {
 		nbus->secondary_control_base = bus->bar3 & 0xFFFE;
 	};
+	
+	/* Busmastering DMA */
+	if (bus->bar4 != 0) {
+		nbus->dma_flag = 1;
+		nbus->busmaster_base = bus->bar4;
+	} else {
+		nbus->dma_flag = 0;
+	}
+	
+	
+	
 	
 	nbus->next = NULL;
 	//now we should add this to the linked list
@@ -489,5 +338,42 @@ uint8_t init_ide() {
 	}
 	return 0;
 };
+
+
+
+
+
+
+
+#ifdef DEBUG
+#include <tty.h>
+
+void ide_print_state() {
+	kputs("\nIDE STATE\n {drive id}: {io base} {control base} {lba28 sectors} {lba48 sectors}\n");
+	ide_drive_t *di = ide_first_drive;
+	
+	while (di) {
+		kputx(di->drive_id);
+		kputs(": ");
+		
+		kputx(di->io_port_base);
+		kputs(" ");
+		kputx(di->control_port_base);
+		kputs(" ");
+		
+		kputx(di->lba28_sectors);
+		kputs(" ");
+		kputx(di->lba48_sectors);
+		kputs("\n");
+		
+		di = di->next;
+	}
+};
+
+
+#endif
+
+
+
 
 

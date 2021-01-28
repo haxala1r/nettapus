@@ -19,7 +19,7 @@ int32_t atoi(const char*);
 int32_t atox(const char*);
 
 char xbtoa(uint8_t);
-void xtoa(uint32_t, char*);
+void xtoa(uint64_t, char*);
 uint32_t oct2bin(char*, uint32_t);
 int32_t bin2oct(uint32_t, char*, uint32_t);
 
