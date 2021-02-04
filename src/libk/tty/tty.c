@@ -4,6 +4,7 @@
 #include <tty.h>
 #include <mem.h>
 #include <fs/fs.h>
+#include <task.h>
 
 #define PSF_FONT_MAGIC 0x864ab572
 
@@ -80,6 +81,15 @@ void putc(char c, uint32_t fg, uint32_t bg) {
 		return;
 	}
 	
+	/* Handle backspace */
+	if (c == '\b') {
+		if (cursorx != 0) {
+			cursorx--;
+		}
+		putchar(' ', cursorx, cursory, fg, bg);
+		return;
+	}
+	
 	/* Handle cases where the end of line has been reached. */
 	if (cursorx >= (vga_get_fb_width() / font_hdr->width + 1)) {
 		cursorx = 0;
@@ -93,6 +103,7 @@ void putc(char c, uint32_t fg, uint32_t bg) {
 	
 	
 	putchar(c, cursorx++, cursory, fg, bg);
+	
 };
 
 void kput_data(char *data, uint64_t count) {
@@ -109,13 +120,24 @@ void kputs_color(char *str, uint32_t fg, uint32_t bg) {
 };
 
 void kputs(char *str) {
+	/* To avoid race conditions, the scheduler needs to be locked until the string is
+	 * properly displayed. */
+	lock_scheduler();
+	
 	kputs_color(str, foreground_color, background_color);
+	
+	unlock_scheduler();
 };
 
 void kputx(uint64_t num) {
+	/* This is a simple wrapper. It simply turns the number into a string, and prints that. */
+	lock_scheduler();
+	
 	char str[20] = {};
 	xtoa(num, str);
-	kputs(str);
+	kput_data(str, 18);
+	
+	unlock_scheduler();
 };
 
 

@@ -63,6 +63,14 @@ inline void outl(uint16_t port, uint32_t val) {
 }
 
 
+
+
+inline void io_wait(void) {
+	asm volatile ("outb %%al, $0x80" : : "a"(0));
+};
+
+
+
 #ifdef __cplusplus
 }
 #endif

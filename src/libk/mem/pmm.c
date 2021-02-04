@@ -132,9 +132,9 @@ uint64_t allocpps(uint64_t amount) {
 	for (uint64_t i = 0; i < (sizeof(physical_memory.bitmap))*8; i++) {
 		/* This loop goes over every page available. */
 		
-		for (uint64_t j = 0; j < amount; j++) {
-			if (!isppUsed(i + j)) {
-				ia++;
+		for (uint64_t j = 0; j < amount; j++, ia++) {
+			if (isppUsed(i + j)) {
+				break;
 			}
 		}
 		
@@ -166,7 +166,15 @@ uint8_t freepp(uint64_t page) {
 	return setppUsed(page, 0);	/* Might be a good idea to make this a macro. */
 }
 
-
+uint8_t freepps(uint64_t page, uint64_t amount) {
+	for (size_t i = 0; i < amount; i++) {
+		if (setppUsed(page + i, 0)) {
+			return 1;
+		}
+	}
+	
+	return 0;
+}
 
 
 uint8_t init_pmm(struct stivale2_struct_tag_memmap *memtag) {

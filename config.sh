@@ -5,7 +5,7 @@
 export TARGET="x86_64-elf"
 export PWD=$(pwd)
 
-export AS="${TARGET}-as"
+export AS="nasm -f elf64 "
 export AR="${TARGET}-ar"
 export CC="${TARGET}-gcc"
 export LD="${TARGET}-ld"
@@ -15,8 +15,8 @@ export LD="${TARGET}-ld"
 
 export CFLAGS=" -O2 -std=gnu99 -Wall -Wextra -mcmodel=large -fno-pic -fno-stack-protector -mno-red-zone"
 
-#uncomment this while debugging.
-CFLAGS="${CFLAGS} -DDEBUG"
+# Uncomment this while debugging.
+#CFLAGS="${CFLAGS} -DDEBUG"
 
 
 export SYSROOT="${PWD}/root"

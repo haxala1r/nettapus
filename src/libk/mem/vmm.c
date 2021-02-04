@@ -3,7 +3,7 @@
 
 #include <mem.h>
 
-
+uint8_t random_flag = 0;
 /* Define the first structs, and initialise them with all zeroes. Necessary to bootstrap. */
 p_map_level4_table __attribute__((aligned(4096))) kpml4 	= {};
 pd_ptr_table __attribute__((aligned(4096))) k_first_pdpt 	= {};
@@ -15,7 +15,9 @@ p_map_level4_table* kgetPML4T(void) {
 	return &kpml4;
 };
 
-
+void krefresh_vmm() {
+	loadPML4T((uint64_t*)kpml4.physical_address);
+}
 
 /* 
  * In order to map things a bit more seamlessly, I decided it was a good idea to
@@ -47,7 +49,7 @@ p_map_level4_table* kgetPML4T(void) {
  * TODO: Merging this with the actual heap would be great.
  */
 uint64_t page_heap_begin;			/* Beginning address. */
-uint64_t page_heap_phys;			/* Beginning address. */
+uint64_t page_heap_phys;			/* Beginning physical address. */
 uint64_t page_heap_bitmap_length;	/* Amount of bytes the bitmap occcupies. */ 
 uint64_t page_heap_length;			/* Length, in bytes.  */
 uint64_t *page_heap_bitmap;		
@@ -94,6 +96,111 @@ void free_page_struct(struct page_struct *ps) {
 	}
 	return;
 };
+
+
+
+
+
+uint64_t alloc_pages(uint64_t amount, uint64_t base, uint64_t limit) {
+	/* Allocates some Physical and virtual pages and maps them.
+	 * The virtual pages are guaranteed to be continous. No such thing is guaranteed for the
+	 * physical pages.
+	 * The virtual address will be returned. The returned address is guaranteed to be above
+	 * base and below limit. If no pages were available, 0 will be returned.*/
+	
+	uint64_t i = base;
+	i &= 0x0000FFFFFFFFF000;
+	
+	p_map_level4_table *pml4t = kgetPML4T();
+	if (pml4t == NULL) {
+		return 0;
+	}
+	
+	pd_ptr_table *pdpt 	= NULL;//pml4t->child[i / 0x8000000000];
+	page_dir *pd 		= NULL;//pdpt->child[(i % 0x8000000000) / 0x40000000];
+	page_table *pt 		= NULL;//pd->child[(i % 0x40000000) / 0x20000];
+	
+	
+	/* This is the variable that keeps track of how many free pages we found so far.
+	 * Reset to 0 when a non-free page is found. When this equals "amount", that means
+	 * we found the requested amount of pages.
+	 */
+	uint64_t ia = 0;		
+	
+	
+	while (1){
+		if (i > limit) {
+			break;
+		}
+		
+		if ( (((i / 0x1000) % 512) == 0) || (i == (base & 0x0000FFFFFFFFF000))) {
+			/* We either crossed a boundry, or this is the first iteration.
+			 * Thus, it is necessary to recalculate addresses.*/
+			pdpt	= pml4t->child[i / 0x8000000000];
+			if (pdpt == NULL) 	{ 
+				pml4t->child[i / 0x8000000000] = pdpt = alloc_page_struct();
+				pml4t->entries[i / 0x8000000000] = pdpt->physical_address | 2 | 1;
+			}
+			
+			pd 		= pdpt->child[(i % 0x8000000000) / 0x40000000];
+			if (pd == NULL) 	{ 
+				pdpt->child[(i % 0x8000000000) / 0x40000000] = pd = alloc_page_struct();
+				pdpt->entries[(i % 0x8000000000) / 0x40000000] = pd->physical_address | 2 | 1;
+			}
+			
+			pt 		= pd->child[(i % 0x40000000) / 0x20000];
+			if (pt == NULL) 	{ 
+				struct page_struct *new_table = alloc_page_struct();
+				pt = (page_table* )new_table;
+				pt->physical_address = new_table->physical_address;
+				
+				pd->child[(i % 0x40000000) / 0x20000] = pt;
+				pd->entries[(i % 0x40000000) / 0x20000] = pt->physical_address | 2 | 1;
+			}
+			
+		}
+		
+		if (pt == NULL) 	{ i += 0x1000;	i &= 0x0000FFFFFFFFF000; continue; }
+		/* Check this entry. */
+		if (!(pt->entries[(i % 0x200000) / 0x1000] & 1)) {
+			/* Page is free. */
+			ia++;
+		} else {
+			/* Page is used. */
+			ia = 0;
+		}
+		
+		/* Skip a single page. */
+		i += 0x1000;	
+		i &= 0x0000FFFFFFFFF000;
+		
+		if (ia == amount) {
+			/* We already found the requested amount of pages. We can safely map them, and
+			 * return.
+			 */
+			 
+			/* Allocate the physical pages. */
+			uint64_t base_pp = allocpps(amount);
+			
+			if (base_pp == 0) {
+				break;	/* Failed allocation. */
+			}
+			
+			map_memory(page_to_addr(base_pp), i - ia * 0x1000, ia, pml4t);
+			krefresh_vmm();
+			
+			return (i - ia * 0x1000);
+		}
+	}
+	
+	return 0;
+};
+
+/*
+uint64_t free_pages(uint64_t base, uint64_t amount) {
+	
+};*/
+
 
 
 
@@ -198,9 +305,10 @@ uint8_t map_memory(uint64_t pa, uint64_t va, uint64_t amount, p_map_level4_table
 		
 		/* The page table index needs to be "recalculated" every time. */
 		pt_index		= (va % 0x200000) / 0x1000;
-		pt->entries[pt_index] = (pa + i * 0x1000) | 2 | 1;
+		pt->entries[pt_index] = (pa) | 2 | 1;
 		
 		va += 0x1000;
+		pa += 0x1000;
 	}
 	
 	
@@ -280,8 +388,8 @@ uint8_t unmap_memory(uint64_t va, uint64_t amount, p_map_level4_table* pml4t) {
 uint8_t init_vmm(void) {
 	kpml4.child[511] 		= &k_first_pdpt;
 	k_first_pdpt.child[510]	= &k_first_pd;
-	k_first_pd.child[0]		= &k_first_table;
-	k_first_pd.child[1]		= &k_sec_table;
+	k_first_pd.child[1]		= &k_first_table;
+	k_first_pd.child[127]	= &k_sec_table;
 	
 	/* 
 	 * Set up the tables, and also record their physical addresses. 
@@ -294,8 +402,9 @@ uint8_t init_vmm(void) {
 	k_first_pdpt.entries[510] 		= ((uint64_t)k_first_pd.entries     - kernel_virt_base) | 2 | 1; 
 	
 	k_first_pd.physical_address		= (uintptr_t)k_first_pd.entries    - kernel_virt_base; 
-	k_first_pd.entries[0] 			= ((uint64_t)k_first_table.entries  - kernel_virt_base) | 2 | 1; 
-	k_first_pd.entries[1] 			= ((uint64_t)k_sec_table.entries  - kernel_virt_base) | 2 | 1; 
+	//k_first_pd.entries[0] 			= ((uint64_t)k_first_table.entries  - kernel_virt_base) | 2 | 1; 
+	k_first_pd.entries[1] 			= ((uint64_t)k_first_table.entries  - kernel_virt_base) | 2 | 1; 
+	k_first_pd.entries[127] 			= ((uint64_t)k_sec_table.entries  - kernel_virt_base) | 2 | 1; 
 	
 	
 	k_first_table.physical_address	= (uintptr_t)k_first_table.entries - kernel_virt_base;
@@ -312,14 +421,18 @@ uint8_t init_vmm(void) {
 	
 	
 	/* Map the heap-like structure we will use to allocate more page structs. */
-	uint64_t pp_count = 512;	
+	uint64_t pp_count = 512 * 2;	
 	uint64_t base_pp = allocpps(pp_count);
 	if (base_pp) {
-		map_memory(page_to_addr(base_pp), kernel_virt_base, pp_count, &kpml4);
+		page_heap_begin = kernel_virt_base + 0x10000000;
 		
-		page_heap_begin = kernel_virt_base;
+		/* Initially, we only map a part of the allocated pages. (enough to fill exactly a single page table)*/
+		map_memory(page_to_addr(base_pp), page_heap_begin, 512, &kpml4);
+		krefresh_vmm();
+		
+		
 		page_heap_phys = page_to_addr(base_pp);
-		page_heap_length = 0x200000;
+		page_heap_length = page_to_addr(pp_count);
 		
 		page_heap_bitmap = (uint64_t*) page_heap_begin;
 		page_heap_bitmap_length = 0x2000;	/* Two pages. */
@@ -330,11 +443,21 @@ uint8_t init_vmm(void) {
 		
 		page_heap_first = (struct page_struct*) (page_heap_begin + page_heap_bitmap_length);
 		
+		
+		
+		/* Now that the allocation mechanism is in place, we can map the whole thing. */
+		
+		map_memory(page_to_addr(base_pp + 512), page_heap_begin + 0x200000, pp_count - 512, &kpml4);
+		
+	} else {
+		asm volatile ("hlt;");
 	}
 	
 	
 	/* Load the new page tables. */
 	loadPML4T((uint64_t*)kpml4.physical_address);
+	
+	
 	
 	return GENERIC_SUCCESS;
 }

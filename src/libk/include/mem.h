@@ -140,6 +140,7 @@ heap_t* kgetHeap();		//returns a pointer to kernel's heap.
 uint64_t page_to_addr(uint64_t);	//tells you at which address a page starts. doesn't check the validity of the page.
 uint64_t addr_to_page(uint64_t);	//tells you at which page the address resides in. doesn't check the validity of the address.
 void _create_block(uint64_t, uint64_t, memory_block_t*);	//internal function. creates a block object from address and length.
+void krefresh_vmm();
 
 //Physical memory management.
 uint8_t ispaValid(uint64_t);	//tells whether an address is valid or not.(physical addresses). returns 1 if it is.
@@ -157,25 +158,14 @@ uint8_t freepp(uint64_t);			//"frees" a single physical page.
 
 
 //Virtual memory management
-uint8_t isvpMapped(uint32_t, page_dir*);	//tells whether a virtual page is currently mapped (used) in that page_directory.
-uint8_t isvaMapped(uint32_t, page_dir*);	//tells whether a virtual address is currently mapped (used) in that page_directory. 
-uint32_t findvp();	//finds a free (unmapped) virtual page.
 
-uint8_t map_memory(uint64_t, uint64_t, uint64_t, p_map_level4_table*);	//maps a single physical page to a virtual page. doesn't check if pp is avilable.
-uint8_t unmap_page(uint64_t, uint64_t, p_map_level4_table*);	//unmaps a virtual page, also frees the physical page attached to it.
-uint8_t idMapPage(uint32_t, page_dir*);	//identity maps a page, if both the physical and the virtual pages are free.
-uint8_t idMapRange(uint32_t, uint32_t, page_dir*);	//identity maps a range of pages. checks availability.
+uint8_t map_memory(uint64_t phys, uint64_t virt, uint64_t amount, p_map_level4_table*);	//maps a single physical page to a virtual page. doesn't check if pp is avilable.
+uint8_t unmap_page(uint64_t virt, uint64_t amount, p_map_level4_table*);	//unmaps a virtual page, also frees the physical page attached to it.
 
-uint8_t kpmappv(uint32_t, uint32_t);	//(kernel-side) maps a physical page to a virtual page. uses kernel page directory.
-uint8_t kmmappv(uint32_t, uint32_t);	//(kernel-side) maps a physical address to a virtual one. a wrapper around kpmappv(). not sure about its name.
-	
-	
-uint8_t kpmapv(uint32_t);	//maps a random physical page to a specified virtual page.
-uint8_t kmmapv(uint32_t);	//maps a random physical page to a specified virtual address.(first 12 bits ignored.)
+/* Allocates a random physical page and a random virtual one. Starting address is returned. */
+uint64_t alloc_pages(uint64_t amount, uint64_t base, uint64_t limit);
 
-	
-uint32_t kpmap();	//maps a random physical page to a random virtual page, and returns its starting address.
-uint32_t kpumap(uint32_t);	//unmaps a page from the kernel page directory.
+
 
 
 //Heap (TM) management. (it's kinda trash, but it works okay i guess? though that could be said about everything I write.)
@@ -188,8 +178,8 @@ uint8_t kfree(void*);
 
 //these  functions simply initalise different layers of the Memory Manager (TM)
 uint8_t init_pmm(struct stivale2_struct_tag_memmap*);		//Physical Memory Manager (TM)
-uint8_t init_vmm();								//Virtual  Memory Manager (TM)
-uint8_t init_heap();							//Heap			  Manager (TM)
+uint8_t init_vmm();											//Virtual  Memory Manager (TM)
+uint8_t init_heap();										//Heap			  Manager (TM)
 
 //initialises everything (a.k.a. calls the three functions declared above.)
 uint8_t init_memory(struct stivale2_struct_tag_memmap*);	
@@ -201,17 +191,12 @@ uint8_t init_memory(struct stivale2_struct_tag_memmap*);
 
 void heap_print_state();
 
-#endif
-
+#endif	/* DEBUG */
 
 
 
 #ifdef __cplusplus
 }
-#endif
+#endif 
 
-
-
-
-#endif
-
+#endif /* _MEM_H*/

@@ -1,0 +1,13 @@
+
+# Object files and archives.
+*.o
+*.a
+
+# Binary files.
+*.elf
+*.bin
+
+# Images
+*.img
+
+

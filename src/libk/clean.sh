@@ -1,7 +1,7 @@
 
 
 
-LIBS="vga tty mem string pci disk fs"
+LIBS="vga tty mem string pci disk fs interrupts kbd task"
 
 
 for LIB in ${LIBS}; do

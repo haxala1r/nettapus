@@ -365,6 +365,8 @@ uint8_t init_heap(void) {
 	if (map_memory(page_to_addr(allocpps(256)), 0xFFFFFFFFA0000000, 256, kgetPML4T())) {
 		return 1;
 	}
+	krefresh_vmm();
+	
 	kheap_default.start = 0xFFFFFFFFA0000000;
 
 	kheap_default.end = kheap_default.start + 256 * 0x1000;	
