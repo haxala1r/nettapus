@@ -85,7 +85,8 @@ void _start(struct stivale2_struct *hdr) {
 	 * loading our own page tables. This is because that when we load our own
 	 * page tables, the stivale2 struct will be an invalid address.
 	 */
-	
+	/* Now that paging is enabled, we can load our own GDT. */
+	loadGDT();
 	struct stivale2_struct_tag_framebuffer* fb_hdr_tag;
 	fb_hdr_tag = get_stivale_header(hdr, STIVALE2_STRUCT_TAG_FRAMEBUFFER_ID);
 
@@ -113,8 +114,7 @@ void _start(struct stivale2_struct *hdr) {
 	vga_init(0xFFFFFFFF00000000 + fb_addr, fb_width, fb_height, fb_bpp, fb_pitch);
 	
 	
-	/* Now that paging is enabled, we can load our own GDT. */
-	loadGDT();
+	
 	
 	/* Now initialise everything else. The screen will be filled with red on failure.
 	 * This "failure report mechanism" is not perfect, and will not even work if an error

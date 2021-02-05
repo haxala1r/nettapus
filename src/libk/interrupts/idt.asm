@@ -1,4 +1,4 @@
-%include "macros.asm"
+%include "/home/ezman/Desktop/Hobby_things/Programming/Projects/OS/nettapus/src/libk/interrupts/macros.asm"
 
 SECTION .text
 GLOBAL fx_area

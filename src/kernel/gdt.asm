@@ -47,7 +47,6 @@ _gdt_loaded:
 	mov rax, cr4
 	or ax, 3 << 9
 	mov cr4, rax
-	
 	pop rax
 	ret
 	

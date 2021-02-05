@@ -1,5 +1,5 @@
 
-%include "../interrupts/macros.asm"
+%include "/home/ezman/Desktop/Hobby_things/Programming/Projects/OS/nettapus/src/libk/interrupts/macros.asm"
 
 GLOBAL switch_task
 
