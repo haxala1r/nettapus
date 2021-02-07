@@ -16,26 +16,33 @@ extern "C" {
 #define FS_UNKNOWN 	0xFF
 
 
+
 struct file_system {
-	uint8_t fs_type;
+	/* This holds info on what kind of file system it is. */
+	size_t fs_type;
 	
+	/* The ID of the drive this file system is on. */
+	size_t drive_id;
 	
-	//info needed in order to access the system.
-	uint16_t drive_id;
+	/* The LBA of the file system's start. (i. e. first sector) */
+	uint64_t starting_sector;	
 	
-	uint64_t starting_sector;	//the LBA number the filesystem/partition starts at.
-	uint64_t sector_count;		//The amount of sectors this filesystem contains.
+	/* The amount of sectors it contains. */
+	uint64_t sector_count;		
 	
-	struct file_system* next;	//linked list.
+	/* All the file systems available to the kernel are kept in a singly linked
+	 * list.
+	 */
+	struct file_system* next;
 	
-	//This should point to FS-specific info, used by that specific FS driver (internally.)
-	//it can be the location of a FAT, the LBA of sertain special sector, a BPB
-	//etc. etc. 
-	//none of the functions defined in this file will interfere with this. 
+	/* When a file system is initialised, this pointer will be a pointer
+	 * to FS-specific information contained in a struct by the relevant
+	 * FS driver.
+	 */
 	void* special;		
 };
 
-//this holds a file's relevant info, from the point of view of the VFS.
+/* This contains information on a file, from the point of the VFS. */
 struct file_vnode {
 	struct file_system *fs;
 	char *file_name;
@@ -54,16 +61,16 @@ struct file_vnode {
 
 
 
-//an easy abstraction over files in a file system. This structure is from the point of view of
-//the process requesting the file. IT WILL BE STORED SPECIFICALLY FOR EACH PROCESS, which
-//results in something similar to file descriptors.
-//this structure can easily be ported over to the userspace, when the time comes.
-
+/* This contains information on a file specific to a process (e. g. the current
+ * position on the file), from the point of the process. Each process has
+ * its own list of these.
+ */
 struct file_s {
-	/* The vnode that keeps relevant info on the file. */
+	/* The vnode that keeps relevant info on the file. Multiple file descriptors
+	 * can point to the same node. */
 	struct file_vnode* node;		
 	
-	/* The file descriptor used to access this struct. */
+	/* The file descriptor used to access this struct, by the process. */
 	int32_t file_des;	
 
 	/* Where exactly, e.g. a kread() call will start reading from. */
@@ -75,9 +82,7 @@ struct file_s {
 	/* This is currently unused. */
 	uint8_t flags;	
 	
-	/* The file structs are always kept in a doubly linked list for that process.
-	 * This list will exist in the process struct when I get that far. 
-	 */
+	/* The file structs are always kept in a doubly linked list for each process. */
 	struct file_s *next;
 	struct file_s *prev;
 } __attribute__((packed));
@@ -97,6 +102,7 @@ typedef struct file_s FILE;
 uint8_t fs_read_sectors(file_system_t*, uint64_t, uint32_t, void*);
 uint8_t fs_write_sectors(file_system_t*, uint64_t, uint32_t, void*);
 
+/* These may be removed in the foreseeable future. */
 uint8_t fs_read_bytes(file_system_t*, void*, uint32_t, uint16_t, uint32_t);
 uint8_t fs_write_bytes(file_system_t*, void*, uint32_t, uint16_t, uint32_t);
 
@@ -113,8 +119,8 @@ int32_t kopen(char*, uint8_t);
 
 int32_t kclose(int32_t);
 
-int32_t kread(int32_t, void*, uint64_t);
-int32_t kwrite(int32_t, void*, uint64_t);
+int64_t kread(int32_t, void*, int64_t);
+int64_t kwrite(int32_t, void*, int64_t);
 
 int32_t kseek(int32_t, uint64_t);
 

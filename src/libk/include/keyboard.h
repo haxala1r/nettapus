@@ -31,6 +31,8 @@ extern "C" {
 
 
 
+void disable_kbd();
+void enable_kbd();
 void kbd_handle_key(uint8_t key);
 
 

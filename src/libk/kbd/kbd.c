@@ -3,7 +3,11 @@
 #include <tty.h>
 
 
-
+/* Whether the keyboard interrupts will work or not. It works similarly
+ * to a lock, the keyboard interrupts will be ignored if this lock is
+ * active.
+ */
+uint8_t keyboard_disabled = 0;	
 
 /* Here are the global variables used to keep track of the states of
  *  non-displayable (e.g. shift) keys. 
@@ -31,10 +35,23 @@ char keyset1_up[0xFF] 	= "#*!'^+%&/()=_?\b\tQWERTYUIOP[]\n*ASDFGHJKL;'`*\\ZXCVBN
 char keyset1_low[0xFF] 	= "#*1234567890-=\b\tqwertyuiop[]\n*asdfghjkl;'`*\\zxcvbnm,./*** *************789-456+1230.###**";
 
 
-
+void disable_kbd() {
+	keyboard_disabled++;
+};
+void enable_kbd() {
+	keyboard_disabled--;
+};
 
 void kbd_handle_key(uint8_t key) {
-
+	if (keyboard_disabled) {
+		/* If the keyboard has been locked (or rather disabled), simply 
+		 * ignore the call. TODO: make it so that this only delays calls,
+		 * not ignores them.
+		 */
+		return;	
+	}
+	
+	
 	if ((keyset1_low[key] == '#')) {
 		return;
 	}

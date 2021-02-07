@@ -7,9 +7,9 @@ extern "C" {
 
 #include <stdint.h>
 #include <stddef.h>
+#include <fs/fs.h>
 
-
-struct Registers {
+struct task_registers {
 	/* General purpose registers. */
 	uint64_t rax, rbx, rcx, rdx, rdi, rsi, r8, r9, r10, r11, r12, r13, r14, r15;
 	
@@ -29,12 +29,21 @@ struct Registers {
 
 
 struct Task {
-	struct Registers reg;
+	struct task_registers reg;
+	
+	/* File descriptors open for this process.  */
+	struct file_s *files;		
+	
 	struct Task *next;
 };
 
+
+typedef struct Task Task;
+typedef struct task_registers task_reg;
+
 uint8_t create_task(void (*)());
 uint8_t init_scheduler();
+Task *get_current_task();
 void schedule();
 
 /* Some stuff to prevent being preempted in the middle of a critical section. */
@@ -43,7 +52,7 @@ void unlock_scheduler();
 
 /* This is the low-level task switching function. It saves the registers to the first
  * parameter, and loads the new registers from the second parameter. */
-extern void switch_task(struct Registers *from, struct Registers *to);
+extern void switch_task(task_reg *from, task_reg *to);
 
 
 #ifdef __cplusplus

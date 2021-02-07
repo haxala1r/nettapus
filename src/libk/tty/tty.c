@@ -5,6 +5,7 @@
 #include <mem.h>
 #include <fs/fs.h>
 #include <task.h>
+#include <keyboard.h>
 
 #define PSF_FONT_MAGIC 0x864ab572
 
@@ -67,8 +68,9 @@ void scroll(uint32_t bg) {
 
 void putc(char c, uint32_t fg, uint32_t bg) {
 	/* Outputs a character to the screen. This is a wrapper around putchar, except it takes
-	 * care of scrolling as well. 
+	 * care of scrolling and a bunch of other things as well. 
 	 */
+	
 	
 	/* Handle newline. */
 	if (c == '\n') {
@@ -106,38 +108,43 @@ void putc(char c, uint32_t fg, uint32_t bg) {
 	
 };
 
-void kput_data(char *data, uint64_t count) {
-	for (uint64_t i = 0; i < count ; i++) {
+void kput_data(char *data, size_t count) {
+	for (size_t i = 0; i < count ; i++) {
 		putc(data[i], foreground_color, background_color);
 	}
 };
 
 void kputs_color(char *str, uint32_t fg, uint32_t bg) {
-	while (*str) {
-		putc(*str, fg, bg);
-		str++;
-	}
-};
-
-void kputs(char *str) {
 	/* To avoid race conditions, the scheduler needs to be locked until the string is
 	 * properly displayed. */
 	lock_scheduler();
 	
-	kputs_color(str, foreground_color, background_color);
+	/* Being interrupted inside this function for a key press can crash
+	 * everything.
+	 */
+	disable_kbd();	
 	
+	while (*str) {
+		putc(*str, fg, bg);
+		str++;
+	}
+	
+	/* Unlock the resources we locked at the beginning of the function. */
+	enable_kbd();
 	unlock_scheduler();
+	
+	return;
+};
+
+void kputs(char *str) {
+	kputs_color(str, foreground_color, background_color);
 };
 
 void kputx(uint64_t num) {
 	/* This is a simple wrapper. It simply turns the number into a string, and prints that. */
-	lock_scheduler();
-	
 	char str[20] = {};
 	xtoa(num, str);
-	kput_data(str, 18);
-	
-	unlock_scheduler();
+	kputs(str);
 };
 
 

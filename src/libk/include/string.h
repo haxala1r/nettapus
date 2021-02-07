@@ -14,6 +14,7 @@ void *memset(void*, uint8_t, size_t);
 void *memmove(void*, void*, size_t);
 
 size_t strlen(const char*);
+size_t strcmp(const char*, const char*);
 
 int32_t atoi(const char*);
 int32_t atox(const char*);

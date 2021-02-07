@@ -12,11 +12,10 @@ In order to build Nettapus, you need to have these installed:
 	- MTools.
 	- GNU make.
 
-If you have these installed, then you should be able to build by executing `make`.
+If you have these installed, then you should be able to build by running `make`.
 
-Also keep in mind that Nettapus relies on the stivale2 boot protocol, so if you'd like
-to replace the bootlader, a stivale2-compliant bootloader is necessary, 
-and using GRUB instead of Limine/TomatBoot will not work.
+Also keep in mind that Nettapus relies on the stivale2 boot protocol. That means 
+if you'd like to replace the bootlader, a stivale2-compliant bootloader is necessary. 
 
 ## Testing
 If you'd like to see Nettapus in action after you've built it, 
@@ -36,23 +35,6 @@ Here are some things that have yet to be done:
 	- Add UEFI support.
 	- Add GPT support.
 
-# Dones
-If you want to have an idea of what has been done on Nettapus so far, or what it looks like,
-here are some things from the above list that have been completed:
-	
-	- Switched to higher half.
-	- Switched over to 64-bit mode.
-	- Set up paging.
-	- Added a proper memory manager, as well as a heap. 
-	- Added USTAR support.
-	- Added FAT16 support.
-	- Added PCI support. 
-	- Added an ATA PIO driver. 
-	- Added semi-proper file abstraction.	
-	- Added proper VGA support.
-	- Added keyboard support.
-	- Set up interrupts to a minimal degree.
-	- Added a basic scheduler.
 	
 # Contributions
 If you'd like to contibute to Nettapus, please try to follow these guidelines:

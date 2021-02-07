@@ -78,15 +78,16 @@ extern void loadGDT();
 void second_task();
 
 void _start(struct stivale2_struct *hdr) {
-	
+	/* We should load our own GDT as soon as possible. */
+	loadGDT();	
 	
 	/* 
-	 * It is important that we extract all the information we need before 
-	 * loading our own page tables. This is because that when we load our own
-	 * page tables, the stivale2 struct will be an invalid address.
+	 * It is important that we extract all the information from the bootloader
+	 * we need before loading our own page tables. This is because when we 
+	 * load our own page tables, the stivale2 struct will be an invalid address.
 	 */
-	/* Now that paging is enabled, we can load our own GDT. */
-	loadGDT();
+	
+	
 	struct stivale2_struct_tag_framebuffer* fb_hdr_tag;
 	fb_hdr_tag = get_stivale_header(hdr, STIVALE2_STRUCT_TAG_FRAMEBUFFER_ID);
 
@@ -127,7 +128,7 @@ void _start(struct stivale2_struct *hdr) {
 		while (1) { asm volatile ("hlt;"); };
 	}
 	
-	/* We can get the scheduler up as well, though it won't do much yet. */
+	/* We can get the scheduler up as well. */
 	if (init_scheduler()) {
 		vga_fill_screen(0x00FF0000);
 		while (1) { asm volatile ("hlt;"); };
@@ -168,7 +169,6 @@ void _start(struct stivale2_struct *hdr) {
 	while (1) {
 		kputs(" Hello, multitasking world!\n");
 		asm volatile ("hlt;");
-		
 	}
 }
 
