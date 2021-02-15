@@ -9,7 +9,7 @@ AS := nasm
 # This is the emulator to run the image on. Currently we use QEMU.
 EMUL := qemu-system-x86_64 -cpu qemu64 
 
-KERNELFLAGS := -O2 -std=gnu99 -Wall -Wextra -mcmodel=large -fno-pic -fno-stack-protector -mno-red-zone \
+KERNELFLAGS := -Og -std=c99 -Wall -Wextra -mcmodel=large -fno-pic -fno-stack-protector -mno-red-zone \
 	-ffreestanding -nostdlib --sysroot="src/" -isystem="/libk/include/" 
 
 # Uncomment this while debugging. 

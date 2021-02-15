@@ -385,6 +385,9 @@ uint8_t unmap_memory(uint64_t va, uint64_t amount, p_map_level4_table* pml4t) {
 	 
 };
 
+
+extern void kpanic();
+
 uint8_t init_vmm(void) {
 	kpml4.child[511] 		= &k_first_pdpt;
 	k_first_pdpt.child[510]	= &k_first_pd;
@@ -412,9 +415,7 @@ uint8_t init_vmm(void) {
 	
 	/* Map the pages the kernel is on. */
 	if (map_memory(kernel_phys_base, kernel_virt_base + kernel_phys_base, 0x200, &kpml4)) {
-		while (1) {
-			asm volatile ("hlt;");	/* Halt if we can't map everything properly. */
-		}
+		kpanic();
 	}
 	
 	
@@ -450,7 +451,7 @@ uint8_t init_vmm(void) {
 		map_memory(page_to_addr(base_pp + 512), page_heap_begin + 0x200000, pp_count - 512, &kpml4);
 		
 	} else {
-		asm volatile ("hlt;");
+		kpanic();
 	}
 	
 	

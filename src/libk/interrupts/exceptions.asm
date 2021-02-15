@@ -8,8 +8,7 @@ EXTERN fx_area	; Area we save the SSE registers.
 
 ; C functions to handle the exceptions.
 EXTERN divide_by_zero_handler
-EXTERN double_fault_handler
-
+EXTERN kpanic
 
 
 ; The actual interrupt handlers for the exceptions.
@@ -31,21 +30,14 @@ exception_divide_by_zero:
 
 
 exception_double_fault:
-	hlt
-	pushfq
-	fxsave [fx_area]
-	PUSHAQ
-	
-	cld 
-	call double_fault_handler
-	
-	POPAQ
-	fxrstor [fx_area]
-	popfq
+	mov rsp, temp_stack_top
+	jmp kpanic
 	hlt
 	
-
-
+SECTION .bss
+temp_stack:
+	resb 0x1000
+temp_stack_top:
 
 
 

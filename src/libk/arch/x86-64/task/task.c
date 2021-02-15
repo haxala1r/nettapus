@@ -57,6 +57,10 @@ uint8_t create_task(void (*main)()) {
 		return 1;
 	}
 	
+	/* This should be changed with something to create a new address space,
+	 * instead of working on the kernel address space. Otherwise, 
+	 * there really isn't much point in using paging in the first place. 
+	 */
 	initialise_task(task, main, kgetPML4T()->physical_address, 0x202, alloc_pages(1, 0x80000000, -1) + 0x1000);
 	
 	last_task->next = task;

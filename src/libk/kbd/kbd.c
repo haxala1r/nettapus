@@ -1,10 +1,10 @@
 
 #include <keyboard.h>
 #include <tty.h>
-
+#include <mem.h>
 
 /* Whether the keyboard interrupts will work or not. It works similarly
- * to a lock, the keyboard interrupts will be ignored if this lock is
+ * to a lock, the keyboard won't be flushed immediately if this lock is
  * active.
  */
 uint8_t keyboard_disabled = 0;	
@@ -24,7 +24,9 @@ uint8_t numlock = 0;
 uint8_t scrolllock = 0;
 
 
-
+char *key_buf;
+size_t key_buf_limit = 0x200;
+size_t key_buf_cursor = 0;
 
 /* This is the keyset we'll look up our characters on. 
  * '#' represents invalid characters.
@@ -35,22 +37,42 @@ char keyset1_up[0xFF] 	= "#*!'^+%&/()=_?\b\tQWERTYUIOP[]\n*ASDFGHJKL;'`*\\ZXCVBN
 char keyset1_low[0xFF] 	= "#*1234567890-=\b\tqwertyuiop[]\n*asdfghjkl;'`*\\zxcvbnm,./*** *************789-456+1230.###**";
 
 
-void disable_kbd() {
+void disable_kbd_flush() {
 	keyboard_disabled++;
 };
-void enable_kbd() {
+void enable_kbd_flush() {
+	if (keyboard_disabled == 0) {
+		return;
+	};
 	keyboard_disabled--;
 };
 
-void kbd_handle_key(uint8_t key) {
+void kbd_flush() {
+	/* This function flushes the keys that have been put into the buffer to
+	 * the screen.
+	 */
+	
 	if (keyboard_disabled) {
-		/* If the keyboard has been locked (or rather disabled), simply 
-		 * ignore the call. TODO: make it so that this only delays calls,
-		 * not ignores them.
-		 */
 		return;	
 	}
-	
+	if (key_buf_cursor != 0) {
+		if (key_buf_cursor >= key_buf_limit) {
+			/* There must have been an error somewhere. Fix that. */
+			key_buf_cursor = 0;
+			return;	
+		}
+		
+		/* Print the data to screen.*/
+		kput_data(key_buf, key_buf_cursor);
+		
+		/* Clear the buffer. */
+		memset(key_buf, 0, key_buf_cursor);
+		key_buf_cursor = 0;
+	}
+};
+
+
+void kbd_handle_key(uint8_t key) {
 	
 	if ((keyset1_low[key] == '#')) {
 		return;
@@ -58,7 +80,7 @@ void kbd_handle_key(uint8_t key) {
 	
 	if ((keyset1_low[key] == '*') || (keyset1[key] == '\0')) {
 		
-		/* Don't let this scare you, it only manages the "non-displayable" characters. */
+		/* Handle non-displayable characters */
 		switch (key) {
 			case 0x1:
 				break;
@@ -88,8 +110,8 @@ void kbd_handle_key(uint8_t key) {
 				break;
 				
 			
-			/* The *lock buttons are special. They should switch their state when pressed
-			 * instead of being set only when pressed. 
+			/* The *lock buttons are special. They should switch their 
+			 * state when pressed instead of being set only when pressed. 
 			 */
 			case KBD_CAPSLOCK_PRESSED:
 				
@@ -102,7 +124,7 @@ void kbd_handle_key(uint8_t key) {
 				scrolllock ^= 1;
 				break;
 			
-			/* And do nothing when the key is released. */
+			/* Do nothing when the *lock keys are released. */
 			case KBD_CAPSLOCK_RELEASED:
 			case KBD_NUMLOCK_RELEASED:
 			case KBD_SCROLLLOCK_RELEASED:
@@ -115,15 +137,25 @@ void kbd_handle_key(uint8_t key) {
 		return;
 	}
 	
-	
-	
+	/* Handle upper- and lower-case letters. */
 	if (lshift || rshift || capslock) {
-		kput_data(keyset1_up + key, 1);
+		key_buf[key_buf_cursor++] = keyset1_up[key];
 	} else {
-		kput_data(keyset1_low + key, 1);
+		key_buf[key_buf_cursor++] = keyset1_low[key];
 	}
+	
 	return;
 };
 
-
+uint8_t init_kbd() {
+	/* The keyboard driver keeps all pressed keys in a buffer, and this buffer
+	 * is flushed periodically.
+	 * TODO: complete this. 
+	 */
+	key_buf = kmalloc(key_buf_limit);
+	if (key_buf == NULL) {
+		return 1;
+	}
+	return 0;
+};
 

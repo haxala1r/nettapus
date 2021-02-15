@@ -11,7 +11,7 @@ void sleep(uint32_t ticks) {
 	volatile uint64_t cur = time;
 	
 	while (time < (cur + ticks)) {
-		asm volatile ("nop;");
+		__asm__ volatile ("nop;");
 	}
 	return;
 };
@@ -22,6 +22,9 @@ void put_time() {
 
 void irq0_handler() {
 	time++;
+	if ((time & 3) == 0) {
+		kbd_flush();
+	}
 	outb(PIC_MASTER_CMD, 0x20);
 	schedule();	/* The function itself determines whether a task switch should take place.*/
 };

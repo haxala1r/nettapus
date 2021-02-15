@@ -7,10 +7,4 @@ void divide_by_zero_handler() {
 };
 
 
-void double_fault_handler() {
-	kputs("double fault biiitch.");
-};
-
-
-
 

@@ -31,11 +31,11 @@ extern "C" {
 
 
 
-void disable_kbd();
-void enable_kbd();
+void disable_kbd_flush();
+void enable_kbd_flush();
 void kbd_handle_key(uint8_t key);
-
-
+uint8_t init_kbd();
+void kbd_flush();
 
 
 

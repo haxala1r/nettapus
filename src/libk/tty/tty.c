@@ -115,23 +115,33 @@ void kput_data(char *data, size_t count) {
 };
 
 void kputs_color(char *str, uint32_t fg, uint32_t bg) {
+	if (str == NULL) {
+		return;
+	}
+	
 	/* To avoid race conditions, the scheduler needs to be locked until the string is
 	 * properly displayed. */
 	lock_scheduler();
 	
-	/* Being interrupted inside this function for a key press can crash
-	 * everything.
+	/* Currently, if the keyboard buffer is flushed inside the scroll() 
+	 * function, everything breaks horribly. This call here prevents a
+	 * flush from occurring while we're printing the string.
+	 * 
+	 * This will have to go when the keyboard input is given to an app 
+	 * instead of the screen.
 	 */
-	disable_kbd();	
+	disable_kbd_flush();
 	
 	while (*str) {
 		putc(*str, fg, bg);
 		str++;
 	}
 	
+	
 	/* Unlock the resources we locked at the beginning of the function. */
-	enable_kbd();
+	enable_kbd_flush();
 	unlock_scheduler();
+	
 	
 	return;
 };

@@ -27,7 +27,7 @@
 #include <tty.h>
 #include <interrupts.h>
 #include <task.h>
-
+#include <keyboard.h>
 
 
 
@@ -73,6 +73,18 @@ void* get_stivale_header(struct stivale2_struct* s, uint64_t id) {
 
 
 
+void kpanic() {
+	/* This is a temporary panic function, that fills the entire screen red
+	 * and halts.
+	 */
+	__asm__ volatile ("cli;");
+	vga_fill_screen(0x00FF0000);
+	
+	while (1) {
+		__asm__ volatile ("hlt;");
+	};
+};
+
 
 extern void loadGDT();
 void second_task();
@@ -103,6 +115,7 @@ void _start(struct stivale2_struct *hdr) {
 	/* We have everything we need. Now initialise the memory manager. */
 	init_memory(mm);
 	
+	
 	/* 
 	 * We can initialise the vga driver right away. The console needs some fonts, so we'll
 	 * need to initialise the file system etc. before the console is ready.
@@ -116,7 +129,6 @@ void _start(struct stivale2_struct *hdr) {
 	
 	
 	
-	
 	/* Now initialise everything else. The screen will be filled with red on failure.
 	 * This "failure report mechanism" is not perfect, and will not even work if an error
 	 * occurs *before* VGA is initialised properly, but we don't have much choice as of now.
@@ -124,51 +136,51 @@ void _start(struct stivale2_struct *hdr) {
 	
 	/* First, interrupts. */
 	if (init_interrupts()) {
-		vga_fill_screen(0x00FF0000);
-		while (1) { asm volatile ("hlt;"); };
+		kpanic();
 	}
 	
 	/* We can get the scheduler up as well. */
 	if (init_scheduler()) {
-		vga_fill_screen(0x00FF0000);
-		while (1) { asm volatile ("hlt;"); };
+		kpanic();
 	}
 	
 	/* PCI. The IDE driver depends on this. */
 	if (pci_scan_all_buses()) {
-		vga_fill_screen(0x00FF0000);
-		while (1) { asm volatile("hlt;"); };
+		kpanic();
 	}
 	
-	/* IDE, or ATA. This is currently our only way of accessing a disk. */
+	/* IDE, a.k.a. ATA. This is currently our only way of accessing a disk. */
 	if (init_ide()) {
-		vga_fill_screen(0x00FF0000);
-		while (1) { asm volatile("hlt;"); };
+		kpanic();
 	}
 	
 	/* The file system drivers. */
 	if (fs_init()) {
-		vga_fill_screen(0x00FF0000);
-		while (1) { asm volatile("hlt;"); };
+		kpanic();
 	}
 	
 	/* The TTY driver takes a file name as its init function's only parameter. This file 
 	 * contains the fonts used by the driver itself. This is the reason we have to initialise
 	 * the FS drivers *before* TTY.*/
 	if (tty_init("/fonts/lat9-08.psf")) {
-		vga_fill_screen(0x00FF0000);
-		while (1) { asm volatile("hlt;"); };
+		kpanic();
+	}
+	if (init_kbd()) {
+		kpanic();
 	}
 	
 	
 	kputs("Hello, world!\n");
-
+	
+	
+	
 	/* Now we can create our second task and see if everything works! */
 	create_task(second_task);
 	
 	while (1) {
 		kputs(" Hello, multitasking world!\n");
-		asm volatile ("hlt;");
+		put_time();
+		__asm__ volatile ("hlt;");
 	}
 }
 
@@ -176,7 +188,8 @@ void _start(struct stivale2_struct *hdr) {
 void second_task() {
 	while (1){
 		kputs(" Hello to you, as well!\n");
-		asm volatile ("hlt;");
+		put_time();
+		__asm__ volatile ("hlt;");
 	}
 }
 
