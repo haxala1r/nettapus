@@ -1,17 +1,12 @@
 
 #include <mem.h> 
 
-//generic memory operations and the physical memory allocator is in this file.
 
-
-
-
-
-
-
-//generic page things.
+/* Generic functions used when dealing with pages. 
+ * Might be a good idea to put some of these into macros.
+ */
 uint64_t page_to_addr(uint64_t page) {
-	//turns any page number into an address. note that it doesn't check whether page is valid or not.
+	
 	return page * 0x1000;
 }
 
@@ -32,19 +27,11 @@ void _create_block(uint64_t base_addr, uint64_t len, memory_block_t *dest) {
 
 
 
-
-
-
-
-
-
-
 uint8_t init_memory(struct stivale2_struct_tag_memmap *memtag) {
 
 	if (init_pmm(memtag)) {
 		return 1;
 	}
-	
 	
 	if (init_vmm()) {
 		return 2;

@@ -7,7 +7,7 @@
 #include <fs/fat16.h>
 
 
-int32_t seek(Task *task, int32_t file_des, uint64_t new_pos) {
+int32_t seek(TASK *task, int32_t file_des, uint64_t new_pos) {
 	if (task == NULL) { return -1; };
 	
 	FILE* f = vfs_fd_lookup(task, file_des);

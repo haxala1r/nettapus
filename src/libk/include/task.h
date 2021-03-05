@@ -7,10 +7,26 @@ extern "C" {
 
 #include <stdint.h>
 #include <stddef.h>
-//#include <fs/fs.h>
+
+
+
+#define TASK_DEFAULT_TIME 50
+
+/* Some values for the task's state attribute. */
+
+/* The task is currently being run. */
+#define TASK_STATE_RUNNING	1
+
+/* Ready to run. */
+#define TASK_STATE_READY		2
+
+/* The task is blocking. */
+#define TASK_STATE_BLOCK		3
+
+
 
 struct file_s;
-struct task_registers {
+struct Task_registers {
 	/* General purpose registers. */
 	uint64_t rax, rbx, rcx, rdx, rdi, rsi, r8, r9, r10, r11, r12, r13, r14, r15;
 	
@@ -30,30 +46,67 @@ struct task_registers {
 
 
 struct Task {
-	struct task_registers reg;
+	struct Task_registers reg;
 	
 	/* File descriptors open for this process.  */
 	struct file_s *files;		
 	
+	/* The amount of time this task has remaining (in ticks) */
+	uint64_t ticks_remaining; 
+	
+	/* The current state of the task (whether it can run or not etc.) */
+	uint64_t state;
+	
+	/* This is here for a linked list. */
 	struct Task *next;
 };
 
 
-typedef struct Task Task;
-typedef struct task_registers task_reg;
+struct Semaphore {
+	size_t max_count;
+	size_t current_count;
+	
+	struct Task *first_waiting_task;
+	struct Task *last_waiting_task;
+};
+
+
+
+typedef struct Task 			TASK;
+typedef struct Semaphore 		SEMAPHORE;
+typedef struct Task_registers 	TASK_REG;
 
 uint8_t create_task(void (*)());
 uint8_t init_scheduler();
-Task *get_current_task();
-void schedule();
+TASK *get_current_task();
+void scheduler_irq0();
+void yield();
+
+void block_task();
+void unblock_task();
+
 
 /* Some stuff to prevent being preempted in the middle of a critical section. */
 void lock_scheduler();
 void unlock_scheduler();
+void lock_task_switches();
+void unlock_task_switches();
+
+/* Some stuff for process syncronization. */
+SEMAPHORE *create_semaphore(int32_t max_count);
+void acquire_semaphore(SEMAPHORE *semaphore);
+void release_semaphore(SEMAPHORE *semaphore);
+
+
 
 /* This is the low-level task switching function. It saves the registers to the first
  * parameter, and loads the new registers from the second parameter. */
-extern void switch_task(task_reg *from, task_reg *to);
+extern void switch_task(TASK_REG *from, TASK_REG *to);
+
+
+#ifdef DEBUG
+void print_tasks();
+#endif	
 
 
 #ifdef __cplusplus

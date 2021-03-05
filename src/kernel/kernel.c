@@ -72,23 +72,9 @@ void* get_stivale_header(struct stivale2_struct* s, uint64_t id) {
 };
 
 
-
-void kpanic() {
-	/* This is a temporary panic function, that fills the entire screen red
-	 * and halts.
-	 */
-	__asm__ volatile ("cli;");
-	vga_fill_screen(0x00FF0000);
-	
-	while (1) {
-		__asm__ volatile ("hlt;");
-	};
-};
-
-
 extern void loadGDT();
 void second_task();
-
+int32_t fds[2];
 void _start(struct stivale2_struct *hdr) {
 	/* We should load our own GDT as soon as possible. */
 	loadGDT();	
@@ -169,27 +155,48 @@ void _start(struct stivale2_struct *hdr) {
 		kpanic();
 	}
 	
-	
 	kputs("Hello, world!\n");
 	
+	/* This is a simple test to see if pipes are working properly.
+	 * Here's how it works:
+	 * 	The first task continuously writes "Hello there!\n" to the write
+	 * 	end of the pipe, and the second task reads from the pipe two bytes
+	 * 	at a time and prints it. If everything is working properly,
+	 * 	then you should see a continuos stream of the same string repeated
+	 * 	over and over again.
+	 */
 	
+	/* Create the pipe. Currently, when a task is created, the current
+	 * task's file descriptors are copied over for this to work.
+	 * TODO: That should be changed in the near future.
+	 */
+	pipeu(get_current_task(), fds);
 	
-	/* Now we can create our second task and see if everything works! */
+	/* The string to be written. */
+	char *str = "Hello there!\n";
+	
+	/* Create the second task. */
 	create_task(second_task);
 	
+	/* The first task repeatedly writes the same string to the pipe. */
 	while (1) {
-		kputs(" Hello, multitasking world!\n");
-		put_time();
-		__asm__ volatile ("hlt;");
+		if (kwrite(fds[1], str, strlen(str)) == -1) {
+			kpanic();
+		} 
 	}
 }
 
-
+char buf[16];
 void second_task() {
+	unlock_scheduler();
+	
+	/* The second task repeatedly reads from the pipe, 2 bytes at a time. */
 	while (1){
-		kputs(" Hello to you, as well!\n");
-		put_time();
-		__asm__ volatile ("hlt;");
+		memset(buf, 0, 16);
+		if (kread(fds[0], buf, 2) == -1) {
+			kpanic();
+		}
+		kputs(buf);
 	}
 }
 

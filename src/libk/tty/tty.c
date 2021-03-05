@@ -22,6 +22,13 @@ uint32_t background_color = 0x000000;
 uint32_t cursorx = 0;
 uint32_t cursory = 0;
 
+/* This is here to ensure that two tasks aren't printing things at the 
+ * same time.
+ */
+SEMAPHORE *tty_lock;
+
+
+
 void putchar(uint16_t c, uint32_t cx, uint32_t cy, uint32_t fg, uint32_t bg) {
 
 	char *glyph = font + font_hdr->glyph_size * c;
@@ -109,28 +116,18 @@ void putc(char c, uint32_t fg, uint32_t bg) {
 };
 
 void kput_data(char *data, size_t count) {
+	if (data == NULL) { return; }
+	
 	for (size_t i = 0; i < count ; i++) {
 		putc(data[i], foreground_color, background_color);
 	}
 };
 
 void kputs_color(char *str, uint32_t fg, uint32_t bg) {
-	if (str == NULL) {
-		return;
-	}
+	if (str == NULL) { return; }
 	
-	/* To avoid race conditions, the scheduler needs to be locked until the string is
-	 * properly displayed. */
-	lock_scheduler();
-	
-	/* Currently, if the keyboard buffer is flushed inside the scroll() 
-	 * function, everything breaks horribly. This call here prevents a
-	 * flush from occurring while we're printing the string.
-	 * 
-	 * This will have to go when the keyboard input is given to an app 
-	 * instead of the screen.
-	 */
 	disable_kbd_flush();
+	acquire_semaphore(tty_lock);
 	
 	while (*str) {
 		putc(*str, fg, bg);
@@ -138,10 +135,8 @@ void kputs_color(char *str, uint32_t fg, uint32_t bg) {
 	}
 	
 	
-	/* Unlock the resources we locked at the beginning of the function. */
+	release_semaphore(tty_lock);
 	enable_kbd_flush();
-	unlock_scheduler();
-	
 	
 	return;
 };
@@ -197,6 +192,9 @@ uint8_t tty_init(char *font_file) {
 	}
 	
 	kclose(fd);
+	
+	/* Now create the tty lock. */
+	tty_lock = create_semaphore(1);
 	
 	return 0; 
 };

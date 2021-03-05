@@ -7,7 +7,7 @@ extern "C" {
 
 #include <stddef.h>
 #include <stdint.h>
-//#include <task.h>
+
 
 /* File systems */
 #define FS_USTAR 	0
@@ -16,16 +16,27 @@ extern "C" {
 #define FS_UNKNOWN 	0xFF
 
 
-/* File types */
+/* Vnode types 						*/
 #define FILE_NORMAL 	0
 #define FILE_PIPE 	1
 
-/* Descriptor modes */
+/* Descriptor modes 				*/
 #define FD_READ		0
 #define FD_WRITE		1
 
+/* Flags for file descriptors.		*/
+#define FILE_FLAG_NONBLOCK 0b00000001
+
+/* Some default values. */
+#define DEFAULT_PIPE_SIZE 0x1000
+
+
+
 struct Task;	/* Defined in <task.h>*/
-typedef struct Task Task;
+struct Semaphore;
+typedef struct Task TASK;
+typedef struct Semaphore SEMAPHORE;
+
 
 struct file_system {
 	/* This holds info on what kind of file system it is. */
@@ -75,22 +86,27 @@ struct file_vnode {
 	 * For pipes, this indicates
 	 * the place in the buffer that was written to last. 
 	 */
-	size_t last;
+	volatile size_t last;
 	
 	/* This contains FS-specific info on a file, if it is a file, and it is
 	 * a pointer to the (circular) buffer if it is a pipe.
 	 */
 	void *special;	
 	
+	
+	
 	/* The function pointers for specific operations. */
-	int32_t (*open)(struct file_vnode *, void *, uint8_t);
+	int32_t (*open)(struct file_vnode *, TASK *, uint8_t);
 	int32_t (*close)(struct file_s *);
-	int64_t (*read)(struct file_s *, void *, int64_t);
-	int64_t (*write)(struct file_s *, void *, int64_t);
+	int64_t (*read)(struct file_s *, void *, size_t);
+	int64_t (*write)(struct file_s *, void *, size_t);
 	
 	/* The vnodes are all kept in a doubly-linked list. */
 	struct file_vnode *next;	
 	struct file_vnode *prev;
+	
+	/* This is to ensure only one task can access a node at a time. */
+	SEMAPHORE *semaphore;
 };
 
 
@@ -113,7 +129,9 @@ struct file_s {
 	/* Read/Write. 0 = Read, 1 = Write. */		
 	uint8_t mode;	
 	
-	/* This is currently unused. */
+	/* This is currently only used to determined whether the file descriptor
+	 * is blocking or not.
+	 */
 	uint8_t flags;	
 	
 	/* The file structs are always kept in a doubly linked list for each process. */
@@ -150,29 +168,29 @@ uint8_t fs_list_dirs(file_system_t, char*);
  * a different header.
  */
 
-int64_t read_pipe(FILE *f, void *buf, int64_t bytes);
-int64_t write_pipe(FILE *f, void *buf, int64_t bytes);
+int64_t read_pipe(FILE *f, void *buf, size_t bytes);
+int64_t write_pipe(FILE *f, void *buf, size_t bytes);
 int64_t close_pipe(FILE *f);
 
-int64_t read_file(FILE *f, void *buf, int64_t bytes);
-int64_t write_file(FILE *f, void *buf, int64_t bytes);
+int64_t read_file(FILE *f, void *buf, size_t bytes);
+int64_t write_file(FILE *f, void *buf, size_t bytes);
 int64_t close_file(FILE *f);
 
 
 int32_t kopen_fs(file_system_t *fs, char *fname, uint8_t mode);
 int32_t kopen(char *fname, uint8_t mode);
-int32_t pipeu(Task *task, int32_t *ret);
+int32_t pipeu(TASK *task, int32_t *ret);
 
 int32_t kclose(int32_t fd);
 
-int64_t kread(int32_t fd, void *buf, int64_t bytes);
-int64_t kwrite(int32_t fd, void *buf, int64_t bytes);
+int64_t kread(int32_t fd, void *buf, size_t bytes);
+int64_t kwrite(int32_t fd, void *buf, size_t bytes);
 
 int32_t kseek(int32_t fd, uint64_t where);
 
 
 uint8_t vfs_unlink_node(FILE_VNODE *node);
-FILE *vfs_fd_lookup(Task *task, int32_t fd);
+FILE *vfs_fd_lookup(TASK *task, int32_t fd);
 
 
 

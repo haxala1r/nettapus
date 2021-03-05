@@ -19,7 +19,7 @@ FILE_VNODE *vnodes;
 
 
 
-int32_t vfs_assign_file_des(FILE_VNODE *node, Task *task, uint8_t mode, uint8_t flags) {
+int32_t vfs_assign_file_des(FILE_VNODE *node, TASK *task, uint8_t mode, uint8_t flags) {
 	/* Creates a new file descriptor for a given node. */
 	
 	FILE *f = kmalloc(sizeof(FILE));
@@ -115,7 +115,7 @@ FILE_VNODE *vfs_vnode_lookup(char *file_name) {
 	return i;
 };
 
-FILE *vfs_fd_lookup(Task *task, int32_t file_des) {
+FILE *vfs_fd_lookup(TASK *task, int32_t file_des) {
 	
 	FILE *i = task->files;
 	while (i) {
@@ -171,6 +171,9 @@ uint8_t vfs_unlink_node(FILE_VNODE *node) {
 	if (node->file_name != NULL) {
 		kfree(node->file_name);
 	}
+	if (node->semaphore != NULL) {
+		kfree(node->semaphore);
+	}
 	kfree(node);
 	
 	return 0;
@@ -179,10 +182,9 @@ uint8_t vfs_unlink_node(FILE_VNODE *node) {
 
 
 
-int32_t open_file(FILE_VNODE *node, void *t, uint8_t mode) {
+int32_t open_file(FILE_VNODE *node, TASK *task, uint8_t mode) {
 	/* This is the generic open function for on-disk files. */
 	
-	Task *task = t;
 	
 	/* NULL checks are important. */
 	if (node == NULL) 				{ return -1; };
@@ -235,13 +237,11 @@ int32_t open_file(FILE_VNODE *node, void *t, uint8_t mode) {
 };
 
 
-int32_t open_pipe(FILE_VNODE *node, void *t, uint8_t mode) {
+int32_t open_pipe(FILE_VNODE *node, TASK *task, uint8_t mode) {
 	/* This is the generic open function for pipes. It *can* be used
 	 * for unnamed pipes, but a pointer to the node is necessary, making it
 	 * impossible for userspace apps to actually call this on unnamed pipes.
 	 */
-	
-	Task *task = t;
 	
 	/* NULL checks are important. */
 	if (node == NULL) 				{ return -1; };
@@ -249,15 +249,26 @@ int32_t open_pipe(FILE_VNODE *node, void *t, uint8_t mode) {
 	
 	if (task == NULL) 				{ return -1; };
 	
+	/* Check whether memory for this pipe has already been allocated. 
+	 * If not, we need to allocate it now.
+	 */
+	
+	if (node->special == NULL) {
+		node->special = kmalloc(DEFAULT_PIPE_SIZE);
+		if (node->special == NULL) {
+			return -1;
+		}
+	}
+	
+	
 	
 	return vfs_assign_file_des(node, task, mode, 0);
 };
 
 
 
-int32_t open(file_system_t *fs, Task *task, char *file_name, uint8_t mode) {
+int32_t open(file_system_t *fs, TASK *task, char *file_name, uint8_t mode) {
 	/* Opens a file for the given process on the given file system. */
-	int32_t fd = -1;
 	
 	FILE_VNODE *node;
 	node = vfs_vnode_lookup(file_name);
@@ -289,6 +300,7 @@ int32_t open(file_system_t *fs, Task *task, char *file_name, uint8_t mode) {
 		node->reader_count = 0;		/* open_file updates this accordingly. */
 		node->writer_count = 0;		/* open_file updates this accordingly. */
 		node->special = NULL;		/* open_file sets this accordingly.	  */
+		node->semaphore = create_semaphore(1);
 		
 		node->type = FILE_NORMAL;
 		
@@ -301,40 +313,20 @@ int32_t open(file_system_t *fs, Task *task, char *file_name, uint8_t mode) {
 		
 		/* Create a copy of the file name. */
 		node->file_name = kmalloc(strlen(file_name) + 1);
-		memcpy(node->file_name, file_name, strlen(file_name) + 1);
-		
-		/* Now open the file. */
-		fd = node->open(node, task, mode);
-		
-		
-		/* Now we ask the relevant file system to gather the relevant info about this file. */
-		/* A return of NULL indicates the file could not be found, or
-		 * an error occured. In either case, we can't do much else.
-		 */
-		if (node->special == NULL) {
-			vnodes = vnodes->next;
-			
-			if (vnodes != NULL) {
-				vnodes->prev = NULL;
-			}
-			
-			kfree(node);
-			return -1;
-		}
-	} else {
-		fd = node->open(node, task, mode);
+		memcpy(node->file_name, file_name, strlen(file_name) + 1);	
 	}
-	
-	return fd;
+		
+	/* Now open the file. */
+	return node->open(node, task, mode);
 };
 
 
-int32_t pipeu(Task *task, int32_t *ret) {
+int32_t pipeu(TASK *task, int32_t *ret) {
 	/* This function creates a generic unnamed pipe, with two file descriptors
 	 * as "ends" (one end is read, the other is write)
 	 * 
-	 * This function, unlike pipen(), creates an *unnamed* pipe. I. e. it does
-	 * *not* appear in the filesystem. 
+	 * This function, unlike pipen() (which is yet to be implemented), 
+	 * creates an *unnamed* pipe. I. e. it does *not* appear in the filesystem. 
 	 */
 	
 	FILE_VNODE *node = kmalloc(sizeof(FILE_VNODE));
@@ -359,13 +351,16 @@ int32_t pipeu(Task *task, int32_t *ret) {
 	
 	node->reader_count = 0;	
 	node->writer_count = 0;	
-	node->special = kmalloc(0x1000);	/* Exactly one page. */
+	node->special = NULL;	/* open_pipe initialises this. */
 	node->file_name = NULL;
 	
+	/* We need a way of synchronizing processes. */
+	node->semaphore = create_semaphore(1);
+	
 	/* Remember, for pipes this indicates the last byte in the buffer that 
-	 * was written to! (of course, a 0 indicates the buffer is clean)
+	 * was written to! (of course, a 0 indicates the buffer is clean.)
 	 */
-	node->last = 0;		
+	node->last = 0;	
 	
 	/* Set the relevant functions for the pipe. open() isn't relevant much,
 	 * but it is set for consistency.
@@ -378,6 +373,7 @@ int32_t pipeu(Task *task, int32_t *ret) {
 	ret[1] = node->open(node, task, FD_WRITE);
 	
 	if ((ret[0] == -1) || (ret[1] == -1)) {
+		kfree(node);
 		vnodes = vnodes->next;
 		return -1;
 	}
@@ -393,7 +389,6 @@ int32_t kopen(char* file_name, uint8_t mode) {
 
 #ifdef DEBUG
 #include <tty.h>
-
 void vfs_print_state(void) {
 	vfs_print_nodes();
 	vfs_print_files();
@@ -458,7 +453,4 @@ void vfs_print_files(void) {
 		fi = fi->next;
 	}
 };
-
-
-
 #endif

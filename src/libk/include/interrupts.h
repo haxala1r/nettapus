@@ -52,7 +52,7 @@ void put_time();
 uint8_t init_interrupts();
 
 
-
+void kpanic();
 
 
 

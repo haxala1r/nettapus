@@ -1,4 +1,4 @@
-%include "/home/ezman/Desktop/Hobby_things/Programming/Projects/OS/nettapus/src/libk/interrupts/macros.asm"
+%include "src/libk/interrupts/macros.asm"
 
 SECTION .text
 GLOBAL fx_area
@@ -13,11 +13,12 @@ EXTERN irq1_handler
 
 
 loadIDT:
+	pushfq
 	cli
 	
 	lidt [rdi]
 	
-	sti 
+	popfq
 	ret
 
 

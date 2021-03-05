@@ -71,71 +71,29 @@ void set_IDT_entry(uint8_t index, void (*func_ptr)()) {
 
 
 uint8_t init_interrupts() {
-	
-	uint64_t addr;	/* A variable we (re)use to store the address of an irq handler.*/
-	
-	
 	IDTR.size = (sizeof(struct IDT_entry) * 256);
 	IDTR.offset = (uint64_t)IDT;
 	
+	
 	/* First comes the exceptions. */
-	
-	addr = (uint64_t) exception_divide_by_zero;
-	IDT[0x0].offset_low16 = (addr & 0xFFFF);
-	IDT[0x0].offset_mid16 = ((addr >> 16) & 0xFFFF);
-	IDT[0x0].offset_hi32 = ((addr >> 32) & 0xFFFFFFFF);
-	IDT[0x0].zero = 0;
-	IDT[0x0].zero32 = 0;
-	IDT[0x0].type_attr = 0x8e;
-	IDT[0x0].selector = 8;
-	
-	
-	addr = (uint64_t) exception_double_fault;
-	IDT[0x8].offset_low16 = (addr & 0xFFFF);
-	IDT[0x8].offset_mid16 = ((addr >> 16) & 0xFFFF);
-	IDT[0x8].offset_hi32 = ((addr >> 32) & 0xFFFFFFFF);
-	IDT[0x8].zero = 0;
-	IDT[0x8].zero32 = 0;
-	IDT[0x8].type_attr = 0x8e;
-	IDT[0x8].selector = 8;
-	
+	set_IDT_entry(0, exception_divide_by_zero);
+	set_IDT_entry(8, exception_double_fault);
 	
 	/* Now hardware IRQs*/
+	set_IDT_entry(0x20, irq0);
+	set_IDT_entry(0x21, irq1);
 	
-	addr = (uint64_t) irq0;
-	IDT[0x20].offset_low16 = (addr & 0xFFFF);
-	IDT[0x20].offset_mid16 = ((addr >> 16) & 0xFFFF);
-	IDT[0x20].offset_hi32 = ((addr >> 32) & 0xFFFFFFFF);
-	IDT[0x20].zero = 0;
-	IDT[0x20].zero32 = 0;
-	IDT[0x20].type_attr = 0x8e;
-	IDT[0x20].selector = 8;
-	
-	
-	addr = (uint64_t) irq1;
-	IDT[0x21].offset_low16 = (addr & 0xFFFF);
-	IDT[0x21].offset_mid16 = ((addr >> 16) & 0xFFFF);
-	IDT[0x21].offset_hi32 = ((addr >> 32) & 0xFFFFFFFF);
-	IDT[0x21].zero = 0;
-	IDT[0x21].zero32 = 0;
-	IDT[0x21].type_attr = 0x8e;
-	IDT[0x21].selector = 8;
-	
-	
+	/* Set up the PIC. */
 	PIC_remap(0x20, 0x28);
 	
+	/* Now we can load the IDT we just prepared. */
 	loadIDT(&IDTR);
 	
-	
 	/* Initialise the Programmable Interval Timer, so that we can keep track of time.*/
-	init_pit(0xE90C);
+	init_pit(0xE90);
 	
 	outb(PIC_MASTER_DATA, 0xFC);
 	outb(PIC_SLAVE_DATA, 0xFF);
-	
-	
-	
-	
 	return 0;
 };
 
