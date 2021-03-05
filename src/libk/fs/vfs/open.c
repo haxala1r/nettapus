@@ -172,6 +172,9 @@ uint8_t vfs_unlink_node(FILE_VNODE *node) {
 		kfree(node->file_name);
 	}
 	if (node->semaphore != NULL) {
+		/* BUG: If there are processes waiting for this semaphore, then
+		 * they will stay blocked forever. This should be fixed in the future.
+		 */
 		kfree(node->semaphore);
 	}
 	kfree(node);
@@ -190,10 +193,12 @@ int32_t open_file(FILE_VNODE *node, TASK *task, uint8_t mode) {
 	if (node == NULL) 				{ return -1; };
 	if (node->fs == NULL) 			{ return -1; };
 	if (node->file_name == NULL) 	{ return -1; };
+	if (node->semaphore == NULL) 	{ return -1; };
 	if (node->type != FILE_NORMAL)	{ return -1; };
 	
 	if (task == NULL) 				{ return -1; };
 	
+	acquire_semaphore(node->semaphore);
 	
 	/* Check if the relevant (FS-specific) data about the file has
 	 * already been loaded. If not, we need to load it now. 
@@ -228,12 +233,20 @@ int32_t open_file(FILE_VNODE *node, TASK *task, uint8_t mode) {
 		 * or an error occurs. 
 		 */
 		if (node->special == NULL) {
+			release_semaphore(node->semaphore);
 			return -1;	
 		}
 	}
 	
-	/* Now we need to assign a file descriptor, then we can return. */
-	return vfs_assign_file_des(node, task, mode, 0);
+	/* Now we need to assign a file descriptor, then we can return. 
+	 * A variable is used, because we need to release the semaphore after
+	 * the file descriptor has been assigned.
+	 */
+	
+	int32_t fd = vfs_assign_file_des(node, task, mode, 0);
+	
+	release_semaphore(node->semaphore);
+	return fd;
 };
 
 
@@ -245,9 +258,12 @@ int32_t open_pipe(FILE_VNODE *node, TASK *task, uint8_t mode) {
 	
 	/* NULL checks are important. */
 	if (node == NULL) 				{ return -1; };
+	if (node->semaphore == NULL) 	{ return -1; };
 	if (node->type != FILE_PIPE)	{ return -1; };
 	
 	if (task == NULL) 				{ return -1; };
+	
+	acquire_semaphore(node->semaphore);
 	
 	/* Check whether memory for this pipe has already been allocated. 
 	 * If not, we need to allocate it now.
@@ -260,9 +276,15 @@ int32_t open_pipe(FILE_VNODE *node, TASK *task, uint8_t mode) {
 		}
 	}
 	
+	/* Now we need to assign a file descriptor, then we can return. 
+	 * A variable is used, because we need to release the semaphore after
+	 * the file descriptor has been assigned.
+	 */
 	
+	int32_t fd = vfs_assign_file_des(node, task, mode, 0);
 	
-	return vfs_assign_file_des(node, task, mode, 0);
+	release_semaphore(node->semaphore);
+	return fd;
 };
 
 
@@ -273,9 +295,12 @@ int32_t open(file_system_t *fs, TASK *task, char *file_name, uint8_t mode) {
 	FILE_VNODE *node;
 	node = vfs_vnode_lookup(file_name);
 	if (node == NULL) {
-		/* We need to create a new node. */
-		
-		/* Allocate space for a new node, and add it to the very beginning
+		/* We need to create a new node. 
+		 * TODO: Create a general VFS semaphore, so that if two tasks
+		 * try to create nodes at the same time, they don't screw everything
+		 * up. This should be fixed everywhere new nodes are created.
+		 *
+		 * Allocate space for a new node, and add it to the very beginning
 		 * of the doubly-linked list.
 		 */
 		node = kmalloc(sizeof(FILE_VNODE));
