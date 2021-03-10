@@ -94,6 +94,8 @@ uint8_t init_interrupts() {
 	
 	outb(PIC_MASTER_DATA, 0xFC);
 	outb(PIC_SLAVE_DATA, 0xFF);
+	
+	__asm__("sti;");
 	return 0;
 };
 

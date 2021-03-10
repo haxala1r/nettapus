@@ -33,7 +33,6 @@ void irq0_handler() {
 };
 
 
-
 void irq1_handler() {
 	uint8_t key = inb(0x60);	/* Get the key  that was pressed. */
 	kbd_handle_key(key);

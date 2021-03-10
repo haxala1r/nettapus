@@ -10,12 +10,13 @@ switch_task:
 	; RDI should contain a pointer to the registers of the task to be switched from.
 	; The structure is defined in task.h
 	
-	
+	cmp rdi, 0
+	je switch_task.restore
 	
 	push rax 	; Save rax.
 	
 	; We need to save RIP. Not really, we can just specify whatever we want.
-	mov rax, return
+	mov rax, switch_task.return
 	mov [rdi + 0x80], rax	; The new RIP will be loaded later.
 	
 	; Let's do CR3 now.
@@ -53,17 +54,7 @@ switch_task:
 	.fx_save:
 	fxsave [rdi + 0xA0 + rbx]	
 
-	; We need to make sure the new registers are also 16-byte aligned.
-	mov rbx, 0
-	mov rax, rsi
-	and rax, 0xF
-	jz switch_task.fx_rstor
 	
-	mov rbx, 0x10
-	sub rbx, rax
-	
-	.fx_rstor:
-	fxrstor [rsi + 0xA0 + rbx]
 	
 	; Restore the registers, because we need to save the general-purpose registers. 
 	pop rbx
@@ -87,6 +78,20 @@ switch_task:
 	mov [rdi + 0x70], rsp
 	mov [rdi + 0x78], rbp
 	
+	
+	.restore:
+	
+	; We need to make sure the new registers are also 16-byte aligned.
+	mov rbx, 0
+	mov rax, rsi
+	and rax, 0xF
+	jz switch_task.fx_rstor
+	
+	mov rbx, 0x10
+	sub rbx, rax
+	
+	.fx_rstor:
+	fxrstor [rsi + 0xA0 + rbx]
 	
 	; Now we load the General-purpose registers  of the new task.
 	
@@ -121,7 +126,7 @@ switch_task:
 	
 	; Now we "return", and everything should be fine.
 	
-return:
+	.return:
 	ret
 	
 
