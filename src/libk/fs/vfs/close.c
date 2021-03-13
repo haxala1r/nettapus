@@ -12,19 +12,19 @@ int32_t close(TASK *task, int32_t file_des) {
 	/* Takes a file descriptor, and "closes" the file corresponding to that descriptor.
 	 * Also frees the file's associated vnode if there are no other "streams" open to it.
 	 */
-	
+
 	FILE *f = vfs_fd_lookup(task, file_des);
 	if (f == NULL) {
 		return 1;
 	}
-	
+
 	/* Unlink the file descriptor from the task's list of files. */
 	if (f == task->files) {
 		task->files = task->files->next;
 		if (task->files != NULL) {
 			task->files->prev = NULL;
 		}
-	
+
 	} else {
 		if (f->next != NULL) {
 			f->next->prev = f->prev;
@@ -33,7 +33,7 @@ int32_t close(TASK *task, int32_t file_des) {
 			f->prev->next = f->next;
 		}
 	}
-	
+
 	FILE_VNODE *node = f->node;
 	/* Now check if there are any other streams open to the node, and if
 	 * not, unlink the node as well.
@@ -47,18 +47,18 @@ int32_t close(TASK *task, int32_t file_des) {
 			break;
 		default: break;
 	}
-	
+
 	kfree(f);
-	
+
 	if (node == NULL) {
 		return 1;
 	}
-	
+
 	if ((node->reader_count == 0) && (node->writer_count == 0)) {
 		/* We also need to free the node. */
-		vfs_unlink_node(node);
+		vfs_destroy_node(node);
 	}
-	
+
 	return 0;
 };
 
