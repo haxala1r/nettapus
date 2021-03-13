@@ -141,21 +141,18 @@ int64_t write_pipe(FILE *f, void *buf, size_t bytes) {
 };
 
 
-
-
-
 int64_t write(TASK *task, int32_t file_des, void *buf, size_t bytes) {
 	/* This function writes to a file/node, at the position file_des indicates. */
 
-	if (task == NULL) 		{ return -1; };
+	if (task == NULL)			{ return -1; };
+
 	FILE *f = vfs_fd_lookup(task, file_des);
-	if (f == NULL) 			{ return -1; };
-	if (f->node == NULL) 	{ return -1; };
+	if (f == NULL)				{ return -1; };
+	if (f->node == NULL)		{ return -1; };
+	if (f->mode != FD_WRITE) 	{ return -1; };
 
 	return f->node->write(f, buf, bytes);
 };
-
-
 
 int64_t kwrite(int32_t file_des, void *buf, size_t bytes) {
 	return write(get_current_task(), file_des, buf, bytes);

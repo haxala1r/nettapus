@@ -144,11 +144,10 @@ int64_t read(TASK *task, int32_t file_des, void* buf, size_t bytes) {
 
 	if (task == NULL) 			{ return -1; }
 
-	/* Find the file. */
 	FILE *f = vfs_fd_lookup(task, file_des);
-
-	/* If the file descriptor isn't open, return an error. */
 	if (f == NULL) 				{ return -1; }
+	if (f->node == NULL)		{ return -1; }
+	if (f->mode != FD_READ)		{ return -1;}
 
 	return f->node->read(f, buf, bytes);
 };
