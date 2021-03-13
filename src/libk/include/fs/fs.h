@@ -32,12 +32,13 @@ extern "C" {
 #define DEFAULT_PIPE_SIZE 0x1000
 
 
-
-struct Task;	/* Defined in <task.h>*/
+/* Defined in <task.h>, which can't be included here because of magical resouns.*/
+struct Task;
 struct Semaphore;
+struct Resource_queue;
 typedef struct Task TASK;
 typedef struct Semaphore SEMAPHORE;
-
+typedef struct Resource_queue QUEUE;
 
 struct file_system {
 	/* This holds info on what kind of file system it is. */
@@ -105,6 +106,10 @@ struct file_vnode {
 
 	/* This is to ensure only one task can access a node at a time. */
 	SEMAPHORE *semaphore;
+
+	/* These queues make it easier for a task to wait for data on a pipe etc. */
+	QUEUE *read_queue;
+	QUEUE *write_queue;
 };
 
 

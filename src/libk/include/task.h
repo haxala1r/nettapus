@@ -29,34 +29,34 @@ struct file_s;
 struct Task_registers {
 	/* General purpose registers. */
 	uint64_t rax, rbx, rcx, rdx, rdi, rsi, r8, r9, r10, r11, r12, r13, r14, r15;
-	
+
 	/* Stack and base. */
 	uint64_t rsp, rbp;
-	
+
 	/* RIP, CR3 etc.*/
 	uint64_t rip, cr3, rflags;
-	
+
 	/* This is here to make sure the starting address of fxsave_area is 16-byte aligned.
 	 * Though there isn't much point in that, as the area is still not guaranteed to be
 	 * aligned if the starting address of the structure isn't 16-byte aligned. */
-	uint64_t __filler;	
-	
+	uint64_t __filler;
+
 	char __attribute__((aligned(16))) fxsave_area[544];
 } __attribute__((packed));
 
 
 struct Task {
 	struct Task_registers reg;
-	
+
 	/* File descriptors open for this process.  */
-	struct file_s *files;		
-	
+	struct file_s *files;
+
 	/* The amount of time this task has remaining (in ticks) */
-	uint64_t ticks_remaining; 
-	
+	uint64_t ticks_remaining;
+
 	/* The current state of the task (whether it can run or not etc.) */
 	uint64_t state;
-	
+
 	/* This is here for a linked list. */
 	struct Task *next;
 };
@@ -65,16 +65,27 @@ struct Task {
 struct Semaphore {
 	size_t max_count;
 	size_t current_count;
-	
+
 	struct Task *first_waiting_task;
 	struct Task *last_waiting_task;
 };
 
 
+struct Resource_queue {
+	/* The structure itself is pretty similar to Semaphore, but its purpose
+	 * and the functions used to manipulate it are different.
+	 */
+	size_t amount_waiting;
+
+	struct Task *first_task;
+	struct Task *last_task;
+};
+
 
 typedef struct Task 			TASK;
 typedef struct Semaphore 		SEMAPHORE;
 typedef struct Task_registers 	TASK_REG;
+typedef struct Resource_queue	QUEUE;
 
 uint8_t create_task(void (*)());
 uint8_t init_scheduler();
@@ -97,6 +108,9 @@ SEMAPHORE *create_semaphore(int32_t max_count);
 void acquire_semaphore(SEMAPHORE *semaphore);
 void release_semaphore(SEMAPHORE *semaphore);
 
+/* Some stuff to make it easier to have processes wait on a resource. */
+void wait_queue(QUEUE *q);
+void signal_queue(QUEUE *q);
 
 
 /* This is the low-level task switching function. It saves the registers to the first
@@ -106,7 +120,7 @@ extern void switch_task(TASK_REG *from, TASK_REG *to);
 
 #ifdef DEBUG
 void print_tasks();
-#endif	
+#endif
 
 
 #ifdef __cplusplus

@@ -56,6 +56,16 @@ FILE_VNODE *vfs_create_node(uintptr_t open, uintptr_t close, uintptr_t read,
 	/* Every node has a semaphore with a count of one. */
 	node->semaphore = create_semaphore(1);
 
+	if (type == FILE_PIPE) {
+		/* Every pipe needs a read/write queue, so that processes can wait
+		 * until some data has been written to/read from it.
+		 */
+		node->read_queue = kmalloc(sizeof(QUEUE));
+		memset(node->read_queue, 0, sizeof(QUEUE));
+		node->write_queue = kmalloc(sizeof(QUEUE));
+		memset(node->write_queue, 0, sizeof(QUEUE));
+	}
+
 	/* Now we need to link the node. */
 	if (vnodes == NULL) {
 		/* There aren't any other nodes. */
@@ -108,6 +118,10 @@ uint8_t vfs_destroy_node(FILE_VNODE *node) {
 	}
 	if (node->file_name != NULL) {
 		kfree(node->file_name);
+	}
+	if (node->type == FILE_PIPE) {
+		kfree(node->read_queue);
+		kfree(node->write_queue);
 	}
 
 	kfree(node);
