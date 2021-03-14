@@ -33,14 +33,14 @@ extern "C" {
 
 
 /* Defined in <task.h>, which can't be included here because of magical resouns.*/
-struct Task;
-struct Semaphore;
-struct Resource_queue;
-typedef struct Task TASK;
-typedef struct Semaphore SEMAPHORE;
-typedef struct Resource_queue QUEUE;
+struct task_s;
+struct semaphore_s;
+struct resource_queue_s;
+typedef struct task_s TASK;
+typedef struct semaphore_s SEMAPHORE;
+typedef struct resource_queue_s QUEUE;
 
-struct file_system {
+struct file_system_s {
 	/* This holds info on what kind of file system it is. */
 	size_t fs_type;
 
@@ -56,21 +56,21 @@ struct file_system {
 	/* All the file systems available to the kernel are kept in a singly linked
 	 * list.
 	 */
-	struct file_system* next;
+	struct file_system_s *next;
 
 	/* When a file system is initialised, this pointer will be a pointer
 	 * to FS-specific information contained in a struct by the relevant
 	 * FS driver.
 	 */
-	void* special;
+	void *special;
 };
 
 struct file_s;
 
 /* This contains information on a file/pipe/etc. , from the point of the VFS. */
-struct file_vnode {
+struct file_vnode_s {
 	/* The file system it resides on. */
-	struct file_system *fs;
+	struct file_system_s *fs;
 
 	/* The path of the file/pipe, all pipes are kept in a special FS. */
 	char *file_name;
@@ -95,14 +95,14 @@ struct file_vnode {
 	void *special;
 
 	/* The function pointers for specific operations. */
-	int32_t (*open)(struct file_vnode *, TASK *, uint8_t);
+	int32_t (*open)(struct file_vnode_s *, TASK *, uint8_t);
 	int32_t (*close)(struct file_s *);
 	int64_t (*read)(struct file_s *, void *, size_t);
 	int64_t (*write)(struct file_s *, void *, size_t);
 
 	/* The vnodes are all kept in a doubly-linked list. */
-	struct file_vnode *next;
-	struct file_vnode *prev;
+	struct file_vnode_s *next;
+	struct file_vnode_s *prev;
 
 	/* This is to ensure only one task can access a node at a time. */
 	SEMAPHORE *semaphore;
@@ -121,7 +121,7 @@ struct file_vnode {
 struct file_s {
 	/* The vnode that keeps relevant info on the file. Multiple file descriptors
 	 * can point to the same node. */
-	struct file_vnode* node;
+	struct file_vnode_s* node;
 
 	/* The file descriptor used to access this struct, by the process. */
 	int32_t file_des;
@@ -143,8 +143,8 @@ struct file_s {
 } __attribute__((packed));
 
 
-typedef struct file_system file_system_t;
-typedef struct file_vnode FILE_VNODE;
+typedef struct file_system_s FILE_SYSTEM;
+typedef struct file_vnode_s FILE_VNODE;
 typedef struct file_s FILE;
 
 
@@ -154,17 +154,17 @@ typedef struct file_s FILE;
 
 
 
-uint8_t fs_read_sectors(file_system_t*, uint64_t, uint32_t, void*);
-uint8_t fs_write_sectors(file_system_t*, uint64_t, uint32_t, void*);
+uint8_t fs_read_sectors(FILE_SYSTEM*, uint64_t, uint32_t, void*);
+uint8_t fs_write_sectors(FILE_SYSTEM*, uint64_t, uint32_t, void*);
 
 /* These may be removed in the foreseeable future. */
-uint8_t fs_read_bytes(file_system_t*, void*, uint32_t, uint16_t, uint32_t);
-uint8_t fs_write_bytes(file_system_t*, void*, uint32_t, uint16_t, uint32_t);
+uint8_t fs_read_bytes(FILE_SYSTEM*, void*, uint32_t, uint16_t, uint32_t);
+uint8_t fs_write_bytes(FILE_SYSTEM*, void*, uint32_t, uint16_t, uint32_t);
 
 
 
 /* Isn't implemented yet. */
-uint8_t fs_list_dirs(file_system_t, char*);
+uint8_t fs_list_dirs(FILE_SYSTEM, char*);
 
 
 /* These are some of the VFS stuff. Might be a good idea to put these in
@@ -180,7 +180,7 @@ int64_t write_file(FILE *f, void *buf, size_t bytes);
 int64_t close_file(FILE *f);
 
 
-int32_t kopen_fs(file_system_t *fs, char *fname, uint8_t mode);
+int32_t kopen_fs(FILE_SYSTEM *fs, char *fname, uint8_t mode);
 int32_t kopen(char *fname, uint8_t mode);
 int32_t pipeu(TASK *task, int32_t *ret);
 
@@ -201,7 +201,7 @@ FILE_VNODE *vfs_vnode_lookup(char *file_name);
 
 
 uint8_t fs_parse_mbr(uint16_t);
-file_system_t* fs_get_root();
+FILE_SYSTEM* fs_get_root();
 uint8_t fs_init();
 
 

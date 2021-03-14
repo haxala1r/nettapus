@@ -2,7 +2,7 @@
 #include <string.h>
 #include <task.h>
 #include <mem.h>
-
+#include <fs/fat16.h>
 
 /* TODO: Move the node creation/deletion utilities here, and refactor
  * some of the existing code so that they use the functions
@@ -46,10 +46,10 @@ FILE_VNODE *vfs_create_node(uintptr_t open, uintptr_t close, uintptr_t read,
 	memset(node, 0, sizeof(*node));
 
 	/* Set the given attributes. */
-	node->open = (int32_t (*)(struct file_vnode *, TASK *, uint8_t))open;
-	node->close = (int32_t (*)(struct file_s *))close;
-	node->read = (int64_t (*)(struct file_s *, void *, size_t))read;
-	node->write = (int64_t (*)(struct file_s *, void *, size_t))write;
+	node->open = (int32_t (*)(FILE_VNODE *, TASK *, uint8_t))open;
+	node->close = (int32_t (*)(FILE *))close;
+	node->read = (int64_t (*)(FILE *, void *, size_t))read;
+	node->write = (int64_t (*)(FILE *, void *, size_t))write;
 	node->type = type;
 
 
@@ -62,6 +62,7 @@ FILE_VNODE *vfs_create_node(uintptr_t open, uintptr_t close, uintptr_t read,
 		 */
 		node->read_queue = kmalloc(sizeof(QUEUE));
 		memset(node->read_queue, 0, sizeof(QUEUE));
+
 		node->write_queue = kmalloc(sizeof(QUEUE));
 		memset(node->write_queue, 0, sizeof(QUEUE));
 	}
@@ -108,6 +109,9 @@ uint8_t vfs_destroy_node(FILE_VNODE *node) {
 
 	/* Now we can safely free the node. */
 	if (node->special != NULL) {
+		if ((node->fs != NULL) && (node->fs->fs_type == FS_FAT16)) {
+			kfree(((FAT16_FILE*)node->special)->entry);
+		}
 		kfree(node->special);
 	}
 	if (node->semaphore != NULL) {

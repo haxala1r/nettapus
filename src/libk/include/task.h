@@ -26,7 +26,7 @@ extern "C" {
 
 
 struct file_s;
-struct Task_registers {
+struct task_registers_s {
 	/* General purpose registers. */
 	uint64_t rax, rbx, rcx, rdx, rdi, rsi, r8, r9, r10, r11, r12, r13, r14, r15;
 
@@ -45,8 +45,8 @@ struct Task_registers {
 } __attribute__((packed));
 
 
-struct Task {
-	struct Task_registers reg;
+struct task_s {
+	struct task_registers_s reg;
 
 	/* File descriptors open for this process.  */
 	struct file_s *files;
@@ -58,34 +58,34 @@ struct Task {
 	uint64_t state;
 
 	/* This is here for a linked list. */
-	struct Task *next;
+	struct task_s *next;
 };
 
 
-struct Semaphore {
+struct semaphore_s {
 	size_t max_count;
 	size_t current_count;
 
-	struct Task *first_waiting_task;
-	struct Task *last_waiting_task;
+	struct task_s *first_waiting_task;
+	struct task_s *last_waiting_task;
 };
 
 
-struct Resource_queue {
+struct resource_queue_s {
 	/* The structure itself is pretty similar to Semaphore, but its purpose
 	 * and the functions used to manipulate it are different.
 	 */
 	size_t amount_waiting;
 
-	struct Task *first_task;
-	struct Task *last_task;
+	struct task_s *first_task;
+	struct task_s *last_task;
 };
 
 
-typedef struct Task 			TASK;
-typedef struct Semaphore 		SEMAPHORE;
-typedef struct Task_registers 	TASK_REG;
-typedef struct Resource_queue	QUEUE;
+typedef struct task_s   		TASK;
+typedef struct semaphore_s   	SEMAPHORE;
+typedef struct task_registers_s TASK_REG;
+typedef struct resource_queue_s QUEUE;
 
 uint8_t create_task(void (*)());
 uint8_t init_scheduler();

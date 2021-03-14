@@ -208,7 +208,7 @@ int32_t open_pipe(FILE_VNODE *node, TASK *task, uint8_t mode) {
 
 
 
-int32_t open(file_system_t *fs, TASK *task, char *file_name, uint8_t mode) {
+int32_t open(FILE_SYSTEM *fs, TASK *task, char *file_name, uint8_t mode) {
 	/* Opens a file for the given process on the given file system. */
 
 	FILE_VNODE *node;
