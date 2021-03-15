@@ -21,7 +21,7 @@ SEMAPHORE *create_semaphore(int32_t max_count) {
 
 /* TODO: When SMP support is added, these should be guarded by a spinlock. */
 
-void acquire_semaphore(SEMAPHORE *semaphore) {
+void acquire_semaphore(SEMAPHORE *s) {
 
 	/* This is where the spinlock would go, but we don't have
 	 * SMP, so this works well enough.
@@ -30,17 +30,17 @@ void acquire_semaphore(SEMAPHORE *semaphore) {
 
 
 	/* If the semaphore is already at its limit, block. */
-	if (semaphore->current_count >= semaphore->max_count) {
+	if (s->current_count >= s->max_count) {
 
 		/* First, we add the currently running task to the list of waiting
 		 * tasks for that semaphore.
 		 */
-		if (semaphore->last_waiting_task == NULL) {
-			semaphore->first_waiting_task = get_current_task();
-			semaphore->last_waiting_task = get_current_task();
+		if (s->last_waiting_task == NULL) {
+			s->first_waiting_task = get_current_task();
+			s->last_waiting_task = get_current_task();
 		} else {
-			semaphore->last_waiting_task->next = get_current_task();
-			semaphore->last_waiting_task = get_current_task();
+			s->last_waiting_task->next = get_current_task();
+			s->last_waiting_task = get_current_task();
 		}
 
 		/* Now we block. When the task that is currently using this
@@ -55,7 +55,7 @@ void acquire_semaphore(SEMAPHORE *semaphore) {
 		block_task();
 	} else {
 		/* The semaphore is available. */
-		semaphore->current_count++;
+		s->current_count++;
 	}
 
 	/* This is where the lock for this semaphore would be released. */
@@ -66,23 +66,23 @@ void acquire_semaphore(SEMAPHORE *semaphore) {
 
 
 
-void release_semaphore(SEMAPHORE *semaphore) {
+void release_semaphore(SEMAPHORE *s) {
 
 	/* This is where the spinlock would go, but we don't have
 	 * SMP, so this works well enough.
 	 */
 	lock_task_switches();
 
-	if (semaphore->first_waiting_task == NULL) {
-		semaphore->current_count--;
+	if (s->first_waiting_task == NULL) {
+		s->current_count--;
 	} else {
 		/* Unblock the first waiting task. */
-		unblock_task(semaphore->first_waiting_task);
+		unblock_task(s->first_waiting_task);
 
 		/* Unlink the task we just unblocked. */
-		semaphore->first_waiting_task = semaphore->first_waiting_task->next;
-		if (semaphore->first_waiting_task == NULL) {
-			semaphore->last_waiting_task = NULL;
+		s->first_waiting_task = s->first_waiting_task->next;
+		if (s->first_waiting_task == NULL) {
+			s->last_waiting_task = NULL;
 		}
 	}
 

@@ -81,12 +81,12 @@ typedef 	struct fat16_dir_entry_s 	FAT16_DIR_ENTRY	;
 
 char **fat16_parse_path(char *, uint32_t *);
 
-uint16_t fat16_get_FAT_entry(FILE_SYSTEM *, uint32_t);
-uint8_t fat16_load_bpb(FILE_SYSTEM*);
-FAT16_FILE *fat16_file_lookup(FILE_SYSTEM *, char *);
+uint16_t fat16_get_FAT_entry(struct file_system *, uint32_t);
+uint8_t fat16_load_bpb(struct file_system*);
+FAT16_FILE *fat16_file_lookup(struct file_system *, char *);
 uint8_t fat16_name_compare(char *, char *, char *);
-uint8_t fat16_read_file(FILE_SYSTEM *, FAT16_FILE *, void *, uint32_t, uint32_t);
-uint8_t fat16_write_file(FILE_SYSTEM *, FAT16_FILE *, void *, uint32_t, uint32_t);
+uint8_t fat16_read_file(struct file_system *, FAT16_FILE *, void *, uint32_t, uint32_t);
+uint8_t fat16_write_file(struct file_system *, FAT16_FILE *, void *, uint32_t, uint32_t);
 
 #ifdef __cplusplus
 }

@@ -6,7 +6,7 @@
 #include <fs/fat16.h>
 
 
-int64_t write_file(FILE *f, void *buf, size_t bytes) {
+int64_t write_file(struct file *f, void *buf, size_t bytes) {
 	/* This is the generic write function for files. */
 
 	/* Some NULL checks. we don't want the system to crash while writing to a file do we? */
@@ -17,7 +17,7 @@ int64_t write_file(FILE *f, void *buf, size_t bytes) {
 
 
 	/* This is for convenience. */
-	FILE_VNODE *node = f->node;
+	struct file_vnode *node = f->node;
 
 	/* So that we can check the return value of the FS drivers without if's everywhere. */
 	uint8_t status = 0;
@@ -61,7 +61,7 @@ int64_t write_file(FILE *f, void *buf, size_t bytes) {
 
 
 
-int64_t write_pipe(FILE *f, void *buf, size_t bytes) {
+int64_t write_pipe(struct file *f, void *buf, size_t bytes) {
 	/* This is the generic write function for pipes. It writes to a pipe
 	 * and blocks if there isn't space on the pipe.
 	 */
@@ -69,61 +69,45 @@ int64_t write_pipe(FILE *f, void *buf, size_t bytes) {
 	if (f == NULL) 						{ return -1; }
 	if (f->node == NULL) 				{ return -1; }
 	if (f->node->special == NULL) 		{ return -1; }
-	if (f->node->semaphore == NULL) 	{ return -1; }
+	if (f->node->mutex == NULL) 		{ return -1; }
 	if (buf == NULL) 					{ return -1; }
 
 	if (bytes <= 0) 					{ return  0; }
 	if (f->node->reader_count == 0) 	{ return -1; }
 
-	/* Acquire exclusive access to the pipe. */
-	acquire_semaphore(f->node->semaphore);
+	acquire_semaphore(f->node->mutex);
 
-	/* This is here because the upcoming loop modifies "bytes", and we need to
-	 * return the amount of bytes written.
-	 */
+	/* The upcoming loop modifies "bytes".*/
 	size_t to_read = bytes;
 
-
-	/* If there isn't enough space on the pipe, we need to block until
-	 * there is.
-	 */
+	/* Block if there isn't enough space. */
 	while (bytes > (DEFAULT_PIPE_SIZE - f->node->last)) {
 		if (f->flags & FILE_FLAG_NONBLOCK) {
 			return 0;
 		}
 
-		/* This keeps yielding until there's room on the pipe. */
+		/* This waits until there's room on the pipe. */
 		if (f->node->last == DEFAULT_PIPE_SIZE) {
-			/* We lock task switches here, because we need to immediately
-			 * release the semaphore *after* we put ourselves in the queue.
-			 */
+			/* Add ourselves to the queue without blocking yet. */
 			lock_task_switches();
 			wait_queue(f->node->write_queue);
-			release_semaphore(f->node->semaphore);
 
-			/* Now unlock task switches, which causes a task switch, and the
-			 * current task to be blocked.
-			 */
+			release_semaphore(f->node->mutex);
+
+			/* Now we can block as normal. */
 			unlock_task_switches();
 
-			/* When we get unblocked, that means someone must have called
-			 * signal_queue on the write_queue, meaning there's room to
-			 * write to.
-			 */
-			acquire_semaphore(f->node->semaphore);
+			/* We got unblocked, there's room to write to. */
+			acquire_semaphore(f->node->mutex);
 		}
 
-		/* If we reached here, some other task must've read from the buffer.
-		 * If this check doesn't execute, then the part after to loop
-		 * will take care of the rest.
-		 */
 		if (bytes > (DEFAULT_PIPE_SIZE - f->node->last)) {
 			memcpy(f->node->special + f->node->last, buf, DEFAULT_PIPE_SIZE - f->node->last);
 			buf += (DEFAULT_PIPE_SIZE - f->node->last);
 			bytes -= (DEFAULT_PIPE_SIZE - f->node->last);
 			f->node->last = DEFAULT_PIPE_SIZE;
 			if (bytes <= 0) {
-				release_semaphore(f->node->semaphore);
+				release_semaphore(f->node->mutex);
 				return 0;
 			}
 		}
@@ -133,22 +117,20 @@ int64_t write_pipe(FILE *f, void *buf, size_t bytes) {
 	memcpy(f->node->special + f->node->last, buf, bytes);
 	f->node->last += bytes;
 
-	release_semaphore(f->node->semaphore);
-
-	/* Signal to the reader queue that there's more data to read now. */
+	release_semaphore(f->node->mutex);
 	signal_queue(f->node->read_queue);
 	return to_read;
 };
 
-
-int64_t write(TASK *task, int32_t file_des, void *buf, size_t bytes) {
+#include <tty.h>
+int64_t write(struct task *t, int32_t file_des, void *buf, size_t bytes) {
 	/* This function writes to a file/node, at the position file_des indicates. */
 
-	if (task == NULL)			{ return -1; };
+	if (t == NULL)			{ return -1; };
 
-	FILE *f = vfs_fd_lookup(task, file_des);
-	if (f == NULL)				{ return -1; };
-	if (f->node == NULL)		{ return -1; };
+	struct file *f = vfs_fd_lookup(t, file_des);
+	if (f == NULL)				{ return -2; };
+	if (f->node == NULL)		{ return -3; };
 	if (f->mode != FD_WRITE) 	{ return -1; };
 
 	return f->node->write(f, buf, bytes);

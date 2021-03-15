@@ -170,7 +170,9 @@ void _start(struct stivale2_struct *hdr) {
 	 * task's file descriptors are copied over for this to work.
 	 * TODO: That should be changed in the near future.
 	 */
-	pipeu(get_current_task(), fds);
+	if (pipeu(get_current_task(), fds)) {
+		kpanic();
+	}
 
 	/* The string to be written. */
 	char *str = "Hello there!\n";

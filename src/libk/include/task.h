@@ -25,8 +25,8 @@ extern "C" {
 
 
 
-struct file_s;
-struct task_registers_s {
+struct file;
+struct task_registers {
 	/* General purpose registers. */
 	uint64_t rax, rbx, rcx, rdx, rdi, rsi, r8, r9, r10, r11, r12, r13, r14, r15;
 
@@ -45,11 +45,11 @@ struct task_registers_s {
 } __attribute__((packed));
 
 
-struct task_s {
-	struct task_registers_s reg;
+struct task {
+	struct task_registers reg;
 
 	/* File descriptors open for this process.  */
-	struct file_s *files;
+	struct file *files;
 
 	/* The amount of time this task has remaining (in ticks) */
 	uint64_t ticks_remaining;
@@ -58,38 +58,36 @@ struct task_s {
 	uint64_t state;
 
 	/* This is here for a linked list. */
-	struct task_s *next;
+	struct task *next;
 };
 
 
-struct semaphore_s {
+struct semaphore {
 	size_t max_count;
 	size_t current_count;
 
-	struct task_s *first_waiting_task;
-	struct task_s *last_waiting_task;
+	struct task *first_waiting_task;
+	struct task *last_waiting_task;
 };
 
 
-struct resource_queue_s {
+struct queue {
 	/* The structure itself is pretty similar to Semaphore, but its purpose
 	 * and the functions used to manipulate it are different.
 	 */
 	size_t amount_waiting;
 
-	struct task_s *first_task;
-	struct task_s *last_task;
+	struct task *first_task;
+	struct task *last_task;
 };
 
-
-typedef struct task_s   		TASK;
-typedef struct semaphore_s   	SEMAPHORE;
-typedef struct task_registers_s TASK_REG;
-typedef struct resource_queue_s QUEUE;
+/* These structs are opaque, so it's okay to typedef them. */
+typedef struct semaphore SEMAPHORE;
+typedef struct queue QUEUE;
 
 uint8_t create_task(void (*)());
 uint8_t init_scheduler();
-TASK *get_current_task();
+struct task *get_current_task();
 void scheduler_irq0();
 void yield();
 
@@ -105,8 +103,8 @@ void unlock_task_switches();
 
 /* Some stuff for process syncronization. */
 SEMAPHORE *create_semaphore(int32_t max_count);
-void acquire_semaphore(SEMAPHORE *semaphore);
-void release_semaphore(SEMAPHORE *semaphore);
+void acquire_semaphore(SEMAPHORE *s);
+void release_semaphore(SEMAPHORE *s);
 
 /* Some stuff to make it easier to have processes wait on a resource. */
 void wait_queue(QUEUE *q);
@@ -115,7 +113,7 @@ void signal_queue(QUEUE *q);
 
 /* This is the low-level task switching function. It saves the registers to the first
  * parameter, and loads the new registers from the second parameter. */
-extern void switch_task(TASK_REG *from, TASK_REG *to);
+extern void switch_task(struct task_registers *from, struct task_registers *to);
 
 
 #ifdef DEBUG

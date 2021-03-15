@@ -8,21 +8,20 @@
 
 
 
-int32_t close(TASK *task, int32_t file_des) {
+int32_t close(struct task *t, int32_t file_des) {
 	/* Takes a file descriptor, and "closes" the file corresponding to that descriptor.
 	 * Also frees the file's associated vnode if there are no other "streams" open to it.
 	 */
 
-	FILE *f = vfs_fd_lookup(task, file_des);
-	if (f == NULL) {
-		return 1;
-	}
+	struct file *f = vfs_fd_lookup(t, file_des);
+	if (f == NULL)       { return -1; }
+	if (f->node == NULL) { return -1; }
 
 	/* Unlink the file descriptor from the task's list of files. */
-	if (f == task->files) {
-		task->files = task->files->next;
-		if (task->files != NULL) {
-			task->files->prev = NULL;
+	if (f == t->files) {
+		t->files = t->files->next;
+		if (t->files != NULL) {
+			t->files->prev = NULL;
 		}
 
 	} else {
@@ -34,10 +33,8 @@ int32_t close(TASK *task, int32_t file_des) {
 		}
 	}
 
-	FILE_VNODE *node = f->node;
-	/* Now check if there are any other streams open to the node, and if
-	 * not, unlink the node as well.
-	 */
+
+	struct file_vnode *node = f->node;
 	switch (f->mode) {
 		case FD_READ:
 			node->reader_count--;
@@ -47,13 +44,9 @@ int32_t close(TASK *task, int32_t file_des) {
 			break;
 		default: break;
 	}
-
 	kfree(f);
 
-	if (node == NULL) {
-		return 1;
-	}
-
+	/* Unlink the node if no streams are left open.*/
 	if ((node->reader_count == 0) && (node->writer_count == 0)) {
 		/* We also need to free the node. */
 		vfs_destroy_node(node);

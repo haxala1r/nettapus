@@ -17,10 +17,6 @@ exception_double_fault:
 	mov rsp, fault_stack_top
 	mov rbp, rsp
 	jmp kpanic
-	.halt:
-		hlt
-		jmp exception_double_fault.halt
-
 
 SECTION .bss
 fault_stack:

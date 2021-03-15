@@ -2,7 +2,7 @@
 #include <fs/ustar.h>
 #include <mem.h>
 
-USTAR_FILE_t* ustar_file_lookup(FILE_SYSTEM* fs, char* file_name) {
+USTAR_FILE_t* ustar_file_lookup(struct file_system* fs, char* file_name) {
 	/* This function locates the file givena a filename, and returns a struct with relevant info. */
 
 	/* This is used to hold the data we read from disk. */
@@ -54,7 +54,7 @@ USTAR_FILE_t* ustar_file_lookup(FILE_SYSTEM* fs, char* file_name) {
 
 
 
-uint8_t ustar_load_file(FILE_SYSTEM* fs, USTAR_FILE_t* file, void* buf) {
+uint8_t ustar_load_file(struct file_system* fs, USTAR_FILE_t* file, void* buf) {
 	/* This function reads the entire file, and loads it into buf. */
 	if (file == NULL) {
 		return 1;
@@ -114,7 +114,7 @@ uint8_t ustar_load_file(FILE_SYSTEM* fs, USTAR_FILE_t* file, void* buf) {
 
 
 
-uint8_t ustar_read_file(FILE_SYSTEM* fs, USTAR_FILE_t* file, void* buf, uint32_t offset, uint32_t bytes) {
+uint8_t ustar_read_file(struct file_system* fs, USTAR_FILE_t* file, void* buf, uint32_t offset, uint32_t bytes) {
 	/* This function reads bytes from file on fs, at offset. Hope that makes sense. */
 
 	if (file == NULL) {
@@ -138,7 +138,7 @@ uint8_t ustar_read_file(FILE_SYSTEM* fs, USTAR_FILE_t* file, void* buf, uint32_t
 	return 0;
 };
 
-uint8_t ustar_write_file(FILE_SYSTEM* fs, USTAR_FILE_t* file, void* buf, uint32_t offset, uint32_t bytes) {
+uint8_t ustar_write_file(struct file_system* fs, USTAR_FILE_t* file, void* buf, uint32_t offset, uint32_t bytes) {
 	/* This function writes bytes from buf to file on fs, at offset. */
 
 	if (file == NULL) {
@@ -173,7 +173,7 @@ uint8_t ustar_write_file(FILE_SYSTEM* fs, USTAR_FILE_t* file, void* buf, uint32_
 
 
 
-uint8_t ustar_enlarge_file(FILE_SYSTEM* fs, USTAR_FILE_t* file, uint32_t bytes) {
+uint8_t ustar_enlarge_file(struct file_system* fs, USTAR_FILE_t* file, uint32_t bytes) {
 	/* This function enlarges file on fs by bytes. */
 
 	/* This function's logic goes like this:

@@ -7,19 +7,13 @@
 #include <fs/fat16.h>
 
 
+struct file_system *root_fs;
 
-
-FILE_SYSTEM* root_fs;	//the first filesystem in the list will be our root.
-
-FILE_SYSTEM* fs_get_root() {
+struct file_system *fs_get_root() {
 	return root_fs;
 };
 
-
-//These functions, in particular, are only made as a convenient "abstraction" to be able to
-//read stuff off the disk easily, without swapping 15 variables and 33 functions around.
-
-uint8_t fs_read_sectors(FILE_SYSTEM* fs, uint64_t lba, uint32_t sector_count, void* buf) {
+uint8_t fs_read_sectors(struct file_system *fs, uint64_t lba, uint32_t sector_count, void* buf) {
 	if ((lba + sector_count) > (fs->sector_count)) {
 		return 1;
 	}
@@ -28,39 +22,36 @@ uint8_t fs_read_sectors(FILE_SYSTEM* fs, uint64_t lba, uint32_t sector_count, vo
 	 * accessed using 28 bits.
 	 */
 	if ((sector_count <= 256) && ((fs->starting_sector + lba + sector_count) < 0x0FFFFFFF)) {
-
 		if (sector_count == 256) {
 			sector_count = 0;
 		}
 
 		/* Attempt a regular 28-bit PIO read.*/
 		if (ide_pio_read28(fs->drive_id, fs->starting_sector + lba, (uint8_t)sector_count, (uint16_t*)buf)) {
-			return 1;		//an error occured.
+			return 1;
 		}
 
 	} else if (sector_count <= 65536) {
-
 		if (sector_count == 65536) {
 			sector_count = 0;
 		}
 
 		/* Attempt a regular 48-bit PIO read.*/
 		if (ide_pio_read48(fs->drive_id, fs->starting_sector + lba, (uint16_t)sector_count, (uint16_t*)buf)) {
-			return 1;		//an error occured.
+			return 1;
 		}
 
 	} else  {
-		//we need to do it in multiple stages.
-
+		/* We can't do it in a single call. */
 		size_t i = 255;
-		uint8_t* i_buf = (uint8_t*)buf;	//iterator pointer to be able to read conveniently without losing our pointer.
+		uint8_t *i_buf = (uint8_t*)buf;
 		while (sector_count) {
 			if (sector_count < 255) {
 				i = sector_count;
 			}
 
 			if (ide_pio_read28(fs->drive_id, fs->starting_sector + lba, (uint8_t)i, (uint16_t*)i_buf)) {
-				return 1;		//an error occured.
+				return 1;
 			}
 
 			sector_count -= i;
@@ -73,7 +64,7 @@ uint8_t fs_read_sectors(FILE_SYSTEM* fs, uint64_t lba, uint32_t sector_count, vo
 };
 
 
-uint8_t fs_write_sectors(FILE_SYSTEM* fs, uint64_t lba, uint32_t sector_count, void* buf) {
+uint8_t fs_write_sectors(struct file_system* fs, uint64_t lba, uint32_t sector_count, void* buf) {
 	if ((lba + sector_count) > (fs->sector_count)) {
 		return 1;
 	}
@@ -88,7 +79,7 @@ uint8_t fs_write_sectors(FILE_SYSTEM* fs, uint64_t lba, uint32_t sector_count, v
 
 		/* Attempt a regular 28-bit write. */
 		if (ide_pio_write48(fs->drive_id, fs->starting_sector + lba, (uint8_t)sector_count, (uint16_t*)buf)) {
-			return 1;		//an error occured.
+			return 1;
 		}
 
 
@@ -97,9 +88,9 @@ uint8_t fs_write_sectors(FILE_SYSTEM* fs, uint64_t lba, uint32_t sector_count, v
 			sector_count = 0;
 		}
 
-		/* Attempt a regular 48-bit PIO read.*/
+		/* Attempt a regular 48-bit PIO write.*/
 		if (ide_pio_read48(fs->drive_id, fs->starting_sector + lba, (uint16_t)sector_count, (uint16_t*)buf)) {
-			return 1;		//an error occured.
+			return 1;
 		}
 
 	} else  {
@@ -109,7 +100,7 @@ uint8_t fs_write_sectors(FILE_SYSTEM* fs, uint64_t lba, uint32_t sector_count, v
 		size_t i = 255;
 
 		/* This is an iterator pointer to be able to read conveniently without losing our place. */
-		uint8_t* i_buf = (uint8_t*)buf;
+		uint8_t *i_buf = (uint8_t*)buf;
 
 		while (sector_count) {
 			if (sector_count < 255) {
@@ -131,7 +122,7 @@ uint8_t fs_write_sectors(FILE_SYSTEM* fs, uint64_t lba, uint32_t sector_count, v
 };
 
 
-uint8_t fs_read_bytes(FILE_SYSTEM* fs, void* buf, uint32_t sector, uint16_t offset, uint32_t bytes) {
+uint8_t fs_read_bytes(struct file_system* fs, void* buf, uint32_t sector, uint16_t offset, uint32_t bytes) {
 	/* This function reads {bytes} to {buf} from {fs} at {sector} at offset. */
 
 	/* Minimise unnecessary disk access. */
@@ -162,7 +153,7 @@ uint8_t fs_read_bytes(FILE_SYSTEM* fs, void* buf, uint32_t sector, uint16_t offs
 };
 
 
-uint8_t fs_write_bytes(FILE_SYSTEM* fs, void* buf, uint32_t sector, uint16_t offset, uint32_t bytes) {
+uint8_t fs_write_bytes(struct file_system *fs, void *buf, uint32_t sector, uint16_t offset, uint32_t bytes) {
 	/* Reads bytes on a non-sector aligned address. */
 
 	//making sure that the values are correctly written in their respective places.
@@ -236,16 +227,8 @@ uint8_t fs_write_bytes(FILE_SYSTEM* fs, void* buf, uint32_t sector, uint16_t off
 	return 0;
 }
 
-
-
-
-
-
-
-
-
 uint8_t register_fs(uint16_t drive_id, uint64_t starting_sector, uint64_t sector_count) {
-	FILE_SYSTEM* nfs = kmalloc(sizeof(FILE_SYSTEM));	//the partition is used.
+	struct file_system *nfs = kmalloc(sizeof(struct file_system));
 	nfs->drive_id = drive_id;
 
 	nfs->starting_sector = starting_sector;
@@ -274,37 +257,26 @@ uint8_t register_fs(uint16_t drive_id, uint64_t starting_sector, uint64_t sector
 			return 1;
 		}
 	} else {
-		nfs->fs_type = FS_UNKNOWN;	//no other filesystems are implemented yet.
+		nfs->fs_type = FS_UNKNOWN;
 	}
 
-	//now we know everything about this FS.
-
-
-	//we no longer need this data.
 	kfree(first_sector);
 
-
-
-	//now we can add this to the list.
+	/* We can add this to the list. */
 	if (root_fs == NULL) {
 		root_fs = nfs;
 
 		return 0;
 	}
 	if (nfs->fs_type == FS_FAT16) {
-		//USTAR gets priority. This is temporary, and only because USTAR is the only file system
-		//I implemented. This will be replaced with a logic to find our root via the FAT's labels.
+		/* Right now, FAT16 gets priority */
 		nfs->next = root_fs;
 		root_fs = nfs;
-
 		return 0;
 	}
 
-
-
-
 	//find the last entry, in order to add our new fs to the end.
-	FILE_SYSTEM* f = root_fs;
+	struct file_system* f = root_fs;
 	while (f->next != NULL) {
 		f = f->next;
 	}
@@ -315,26 +287,20 @@ uint8_t register_fs(uint16_t drive_id, uint64_t starting_sector, uint64_t sector
 };
 
 
-
-
 uint8_t fs_parse_mbr(uint16_t drive_id) {
-	uint8_t* mbr = kmalloc(512);
+	uint8_t *mbr = kmalloc(512);
 
-	//if we can't read from the disk, skip it.
 	if (ide_pio_read28(drive_id, 0, 1, (uint16_t*)mbr)) {
 		kfree(mbr);
 		return 1;
 	}
 
-
-
-	//if we could read the first sector, now we can start gathering info about the
-	//partitions/filesystems.
-	for (uint8_t j = 0; j < 4; j++) {
-		uint32_t* lmbr = (uint32_t*)(mbr + 0x1BE + j * 0x10);
+	/* Go through all entries. */
+	for (uint8_t i = 0; i < 4; i++) {
+		uint32_t *lmbr = (uint32_t*)(mbr + 0x1BE + i * 0x10);
 
 		/* Check the Partition Type field. If non-zero, the partition is used. */
-		if (mbr[0x1BE + j * 0x10 + 4] != 0) {
+		if (mbr[0x1BE + i * 0x10 + 4] != 0) {
 
 			if (register_fs(drive_id, lmbr[2], lmbr[3])) {
 				return 1;
@@ -360,38 +326,29 @@ uint8_t fs_init() {
 	ide_drive_t* i = ide_get_first_drive();
 	uint8_t* buf = kmalloc(512);
 
-	//the return code. after all, we want to be able to see all errors without stopping execution.
-	//this will also be the amount of errors encountered.
+	/* Will count all errors instead of kpanic()'ing.*/
 	uint8_t ret_code = 0;
-
 
 	while (i != NULL) {
 
-		/* If the first 8 bytes of LBA 1 read "EFI PART", then it's gpt. Otherwise, it must be
-		 * DOS MBR.
-		 */
 		if (ide_pio_read28(i->drive_id, 1, 1, (uint16_t*)buf)) {
-			//if an error occured, simply skip the disk entirely.
 			ret_code++;
 			i = i->next;
 			continue;
 		}
 
+		/* For GPT, first 8 bytes of LBA 1 must read "EFI PART" */
 		if (memcmp((uint8_t*)buf, "EFI PART", 8)) {
-			//if the first 8 bytes aren't the magic values we're looking for, then it must
-			//be mbr.
+			/* MBR. */
 			if (fs_parse_mbr(i->drive_id)) {
 				ret_code++;
 			}
 		} else {
-			//the magic values match what is on the disk. It must be a gpt partitioned disk.
+			/* GPT */
 			if (fs_parse_gpt(i->drive_id)) {
 				ret_code++;
 			}
 		}
-
-
-
 
 		i = i->next;
 	}
@@ -410,16 +367,12 @@ uint8_t fs_init() {
 }
 
 
-
-
-
-
 #ifdef DEBUG
 #include <tty.h>
 
 void fs_print_state() {
 	kputs("\nFS STATES \n{fs_type}: {starting_lba} {sector count}\n");
-	FILE_SYSTEM *fs = root_fs;
+	struct file_system *fs = root_fs;
 
 	while (fs) {
 		kputx(fs->fs_type);
@@ -437,7 +390,3 @@ void fs_print_state() {
 
 
 #endif
-
-
-
-

@@ -13,7 +13,7 @@
  * This list is checked whenever a new file is opened/closed, and the relevant info gets
  * updated.
  */
-FILE_VNODE *vnodes;
+struct file_vnode *vnodes;
 
 SEMAPHORE vnodes_semaphore = {
 	.current_count = 0,
@@ -23,7 +23,7 @@ SEMAPHORE vnodes_semaphore = {
 };
 
 
-FILE_VNODE *vfs_create_node(uintptr_t open, uintptr_t close, uintptr_t read,
+struct file_vnode *vfs_create_node(uintptr_t open, uintptr_t close, uintptr_t read,
 						uintptr_t write, uint16_t type) {
 	/* This function simply allocates space for a new node and links it.
 	 * It does not initialise things like the file system, name, buffer etc.
@@ -40,23 +40,23 @@ FILE_VNODE *vfs_create_node(uintptr_t open, uintptr_t close, uintptr_t read,
 
 	acquire_semaphore(&vnodes_semaphore);
 
-	FILE_VNODE *node = kmalloc(sizeof(FILE_VNODE));
+	struct file_vnode *node = kmalloc(sizeof(struct file_vnode));
 
 	/* Clear out the structure. */
 	memset(node, 0, sizeof(*node));
 
 	/* Set the given attributes. */
-	node->open = (int32_t (*)(FILE_VNODE *, TASK *, uint8_t))open;
-	node->close = (int32_t (*)(FILE *))close;
-	node->read = (int64_t (*)(FILE *, void *, size_t))read;
-	node->write = (int64_t (*)(FILE *, void *, size_t))write;
+	node->open = (int32_t (*)(struct file_vnode *, struct task *, uint8_t))open;
+	node->close = (int32_t (*)(struct file *))close;
+	node->read = (int64_t (*)(struct file *, void *, size_t))read;
+	node->write = (int64_t (*)(struct file *, void *, size_t))write;
 	node->type = type;
 
 
 	/* Every node has a semaphore with a count of one. */
-	node->semaphore = create_semaphore(1);
+	node->mutex = create_semaphore(1);
 
-	if (type == FILE_PIPE) {
+	if ((type == FILE_PIPE_UNNAMED) || (type == FILE_PIPE_NAMED)) {
 		/* Every pipe needs a read/write queue, so that processes can wait
 		 * until some data has been written to/read from it.
 		 */
@@ -85,7 +85,7 @@ FILE_VNODE *vfs_create_node(uintptr_t open, uintptr_t close, uintptr_t read,
 };
 
 
-uint8_t vfs_destroy_node(FILE_VNODE *node) {
+uint8_t vfs_destroy_node(struct file_vnode *node) {
 	if (node == NULL) { return 1; }
 
 	/* There mustn't be any streams open to this node. */
@@ -101,11 +101,11 @@ uint8_t vfs_destroy_node(FILE_VNODE *node) {
 	if (node->prev != NULL) {
 		node->prev->next = node->next;
 	}
-
 	if (node == vnodes) {
 		vnodes = vnodes->next;
 	}
 	release_semaphore(&vnodes_semaphore);
+
 
 	/* Now we can safely free the node. */
 	if (node->special != NULL) {
@@ -114,16 +114,17 @@ uint8_t vfs_destroy_node(FILE_VNODE *node) {
 		}
 		kfree(node->special);
 	}
-	if (node->semaphore != NULL) {
+	if (node->mutex != NULL) {
 		/* BUG: If there are processes waiting for this semaphore, then
 		 * they will stay blocked forever. This should be fixed in the future.
 		 */
-		kfree(node->semaphore);
+		kfree(node->mutex);
 	}
 	if (node->file_name != NULL) {
 		kfree(node->file_name);
 	}
-	if (node->type == FILE_PIPE) {
+	/* Free the QUEUEs.*/
+	if ((node->type == FILE_PIPE_UNNAMED) || (node->type == FILE_PIPE_NAMED)) {
 		kfree(node->read_queue);
 		kfree(node->write_queue);
 	}
@@ -133,10 +134,10 @@ uint8_t vfs_destroy_node(FILE_VNODE *node) {
 	return 0;
 };
 
-FILE_VNODE *vfs_vnode_lookup(char *file_name) {
+struct file_vnode *vfs_vnode_lookup(char *file_name) {
 	/* Finds a vnode given a file name. */
 
-	FILE_VNODE *i = vnodes;
+	struct file_vnode *i = vnodes;
 
 	while (i) {
 		if (!strcmp(i->file_name, file_name)) {

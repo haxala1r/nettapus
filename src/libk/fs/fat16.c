@@ -70,7 +70,7 @@ uint8_t fat16_name_compare(char *fname, char *fat_name, char *fat_extension) {
 };
 
 
-uint16_t fat16_get_FAT_entry(FILE_SYSTEM *fs, uint32_t entry) {
+uint16_t fat16_get_FAT_entry(struct file_system *fs, uint32_t entry) {
 	/* Gets an entry from the File Allocation Table. */
 
 	FAT16_BPB *bpb = fs->special;
@@ -92,7 +92,7 @@ uint16_t fat16_get_FAT_entry(FILE_SYSTEM *fs, uint32_t entry) {
 
 
 
-uint8_t fat16_load_bpb(FILE_SYSTEM *fs) {
+uint8_t fat16_load_bpb(struct file_system *fs) {
 	/* Loads the Bios Parameter Block and the Extended Boot Record for the file system. */
 
 	uint8_t *buf = kmalloc(512);
@@ -111,10 +111,6 @@ uint8_t fat16_load_bpb(FILE_SYSTEM *fs) {
 	fs->special = bpb;
 	return 0;
 };
-
-
-
-
 
 
 char **fat16_parse_path(char *path, uint32_t *depth) {
@@ -177,9 +173,7 @@ char **fat16_parse_path(char *path, uint32_t *depth) {
 			arr[arr_index] = kmalloc(len + 1);
 
 			memset(arr[arr_index], 0, len + 1);
-
 			memcpy(arr[arr_index], i, len);
-
 			arr_index++;
 			break;
 		}
@@ -204,24 +198,16 @@ char **fat16_parse_path(char *path, uint32_t *depth) {
 			arr_index++;
 			continue;
 		}
-
 		j++;
 	}
 
 	/* We should be done, if we reached here. */
-
 	return arr;
 };
 
 
 
-
-
-
-
-
-
-FAT16_DIR_ENTRY *fat16_search_directory(FILE_SYSTEM *fs, char *file_name, uint32_t cluster) {
+FAT16_DIR_ENTRY *fat16_search_directory(struct file_system *fs, char *file_name, uint32_t cluster) {
 	/* Looks through a directory for a file. */
 
 	FAT16_BPB *bpb = fs->special;
@@ -254,8 +240,6 @@ FAT16_DIR_ENTRY *fat16_search_directory(FILE_SYSTEM *fs, char *file_name, uint32
 			return NULL;
 		}
 
-
-
 		/* Loop over each entry in the cluster. */
 		FAT16_DIR_ENTRY *i = buf;
 		while (i) {
@@ -286,12 +270,9 @@ FAT16_DIR_ENTRY *fat16_search_directory(FILE_SYSTEM *fs, char *file_name, uint32
 		};
 
 
-
-
 		if (i->file_name[0] == '\0') {
 			break;	/* Break from the outer loop as well. */
 		}
-
 
 		cluster = fat16_get_FAT_entry(fs, cluster);
 		if (cluster >= 0xFFF7) {
@@ -310,7 +291,7 @@ FAT16_DIR_ENTRY *fat16_search_directory(FILE_SYSTEM *fs, char *file_name, uint32
 
 
 
-FAT16_FILE *fat16_file_lookup(FILE_SYSTEM *fs, char *full_path) {
+FAT16_FILE *fat16_file_lookup(struct file_system *fs, char *full_path) {
 	/* Finds a file on the FAT16 file system, and loads some information about it. */
 	// TODO: Complete this proper.
 
@@ -379,6 +360,7 @@ FAT16_FILE *fat16_file_lookup(FILE_SYSTEM *fs, char *full_path) {
 	kfree(buf);
 
 
+
 	if (file_path == NULL) {
 		/* This means it is in the root directory, so *f now holds our desired file. */
 		FAT16_FILE *f = kmalloc(sizeof(FAT16_FILE));
@@ -421,7 +403,7 @@ FAT16_FILE *fat16_file_lookup(FILE_SYSTEM *fs, char *full_path) {
 
 
 
-uint8_t fat16_read_file(FILE_SYSTEM *fs, FAT16_FILE *file, void* buf, uint32_t offset, uint32_t bytes) {
+uint8_t fat16_read_file(struct file_system *fs, FAT16_FILE *file, void* buf, uint32_t offset, uint32_t bytes) {
 	/* Reads some amount of bytes at some offset from some file. */
 
 
@@ -549,7 +531,7 @@ uint8_t fat16_read_file(FILE_SYSTEM *fs, FAT16_FILE *file, void* buf, uint32_t o
 };
 
 
-uint8_t fat16_write_file(FILE_SYSTEM *fs, FAT16_FILE *file, void* buf, uint32_t offset, uint32_t bytes) {
+uint8_t fat16_write_file(struct file_system *fs, FAT16_FILE *file, void* buf, uint32_t offset, uint32_t bytes) {
 	/* Reads some bytes at some offset from some file. */
 
 	/* Some checks first. */

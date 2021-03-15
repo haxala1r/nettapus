@@ -25,14 +25,14 @@ typedef struct USTAR_FILE USTAR_FILE_t;
 
 
 
-USTAR_FILE_t* ustar_file_lookup(FILE_SYSTEM*, char*);
+USTAR_FILE_t* ustar_file_lookup(struct file_system *fs, char *nm);
 
-uint8_t ustar_load_file(FILE_SYSTEM*, USTAR_FILE_t*, void*);
+uint8_t ustar_load_file(struct file_system *fs, USTAR_FILE_t *f, void *buf);
 
-uint8_t ustar_read_file(FILE_SYSTEM*, USTAR_FILE_t*, void*, uint32_t, uint32_t);
-uint8_t ustar_write_file(FILE_SYSTEM*, USTAR_FILE_t*, void*, uint32_t, uint32_t);
+uint8_t ustar_read_file(struct file_system *fs, USTAR_FILE_t *f, void *buf, uint32_t, uint32_t);
+uint8_t ustar_write_file(struct file_system *, USTAR_FILE_t*, void*, uint32_t, uint32_t);
 
-uint8_t ustar_enlarge_file(FILE_SYSTEM*, USTAR_FILE_t*, uint32_t);
+uint8_t ustar_enlarge_file(struct file_system *, USTAR_FILE_t*, uint32_t);
 
 
 
