@@ -10,10 +10,11 @@ extern "C" {
 
 
 /* File systems */
-#define FS_USTAR     0
-#define FS_FAT16     1
-//#define FS_FAT32   2
-#define FS_UNKNOWN   0xFF
+#define FS_UNKNOWN   0
+#define FS_USTAR     1
+#define FS_FAT16     2
+
+
 
 
 /* Vnode types 						*/
@@ -41,7 +42,35 @@ struct queue;
 typedef struct semaphore SEMAPHORE;
 typedef struct queue QUEUE;
 
+struct file_system;
 
+
+struct fs_driver {
+	/* Loads any necessary information on a file_system, and performs initialisation.
+	 * It MUST return an 0x2 if the file system supplied to it isn't a file system
+	 * it can drive. Return 0 if FS can be driven.
+	 */
+	uint8_t (*init_fs)(struct file_system *fs);
+
+	/* Finds a file on the given file system, given a path. Returns an FS-specific
+	 * structure that will be the "special" field of the vnode, and be used by
+	 * further calls to read, write and close.
+	 */
+	void *(*open)(struct file_system *fs, char *path);
+
+	/* Flushes the changes made to the file, and makes sure everything matches
+	 * what is on the disk.
+	 */
+	uint8_t (*close)(struct file_system *fs, void *f);
+
+	/* Reads/writes a certain amount of bytes at offest to/from buf from/to f. */
+	uint8_t (*read)(struct file_system *fs, void *f, void *buf, size_t offset,
+	                size_t bytes);
+	uint8_t (*write)(struct file_system *fs, void *f, void *buf, size_t offset,
+	                 size_t bytes);
+
+	size_t type;	/* What file system it drives. */
+};
 
 struct file_system {
 	/* This holds info on what kind of file system it is. */
@@ -66,6 +95,9 @@ struct file_system {
 	 * FS driver.
 	 */
 	void *special;
+
+	/* Holds function pointers for all the related function. */
+	struct fs_driver *driver;
 };
 
 struct file;
@@ -193,8 +225,9 @@ struct file_vnode *vfs_create_node(uintptr_t open, uintptr_t close,
 uint8_t vfs_destroy_node(struct file_vnode *node);
 struct file *vfs_fd_lookup(struct task *t, int32_t fd);
 struct file_vnode *vfs_vnode_lookup(char *file_name);
-
-
+int32_t vfs_create_descriptor(struct task *t, struct file_vnode *n,
+                              uint8_t mode, uint8_t flags);
+int32_t vfs_destroy_descriptor(struct task *t, struct file *f);
 
 uint8_t fs_parse_mbr(uint16_t);
 struct file_system* fs_get_root();
@@ -205,9 +238,7 @@ uint8_t fs_init();
 
 void fs_print_state();
 
-void vfs_print_state(void);
 void vfs_print_nodes(void);
-void vfs_print_files(void);
 
 #endif
 

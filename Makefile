@@ -13,7 +13,7 @@ KERNELFLAGS := -O2 -std=c99 -Wall -Wextra -mcmodel=large -fno-pic -fno-stack-pro
 	-ffreestanding -nostdlib --sysroot="src/" -isystem="/libk/include/" 
 
 # Uncomment this while debugging. 
-#KERNELFLAGS += -DDEBUG
+KERNELFLAGS += -DDEBUG
 
 KERNELLINK := -ffreestanding -lgcc  -nostdinc  -nostdlib -no-pie -static -mcmodel=kernel \
 	-z max-page-size=0x1000

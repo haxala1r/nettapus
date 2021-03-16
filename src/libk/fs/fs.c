@@ -7,7 +7,31 @@
 #include <fs/fat16.h>
 
 
+const struct fs_driver fat16_driver = {
+	.init_fs = fat16_load_bpb,
+	.open = fat16_file_lookup,
+	.close = NULL,
+	.read = fat16_read_file,
+	.write = fat16_write_file,
+
+	.type = FS_FAT16
+};
+
+/* This is a list of all FS drivers in the system. These will (hopefully) be
+ * loaded at run-time in the future, in form of kernel modules.
+ */
+struct fs_driver fs_drivers[2] = {
+	fat16_driver,
+	{}
+};
+
+/* Will be incremented every time a driver is added. */
+size_t fs_drivers_count = 1;
+
+
 struct file_system *root_fs;
+
+
 
 struct file_system *fs_get_root() {
 	return root_fs;
@@ -213,9 +237,6 @@ uint8_t fs_write_bytes(struct file_system *fs, void *buf, uint32_t sector, uint1
 	memcpy(temp_buf + offset, ((uint8_t*)buf), bytes);
 
 
-
-
-
 	if (fs_write_sectors(fs, sector, sector_count, temp_buf)) {
 		kfree(temp_buf);
 		return 1;	//an error.
@@ -236,36 +257,29 @@ uint8_t register_fs(uint16_t drive_id, uint64_t starting_sector, uint64_t sector
 	nfs->next = NULL;
 
 
-	/* Read the first sector of the partition/fs to figure out what it is. */
-	uint8_t* first_sector = kmalloc(512);
-	memset(first_sector, 0, 512);
-	if (ide_pio_read28(drive_id, nfs->starting_sector, 1, (uint16_t*)first_sector)) {
-		kfree(first_sector);
-		kfree(nfs);
-		return 1;
-	}
+	/* Determine the file system used. */
 
+	for (size_t i = 0; i < fs_drivers_count; i++) {
+		uint8_t stat = fs_drivers[i].init_fs(nfs);
 
-	/* This part determines the file system. */
-
-	if (memcmp(first_sector + 257, "ustar", 5) == 0) {
-		nfs->fs_type = FS_USTAR;
-		nfs->special = NULL;	/* TAR doesn't need any fs-specific data. */
-	} else if ((first_sector[38] == 0x28) || (first_sector[38] == 0x29))  {
-		nfs->fs_type = FS_FAT16;
-		if (fat16_load_bpb(nfs)) {
+		if (stat == 0) {
+			nfs->fs_type = fs_drivers[i].type;
+			nfs->driver = fs_drivers + i;
+			break;
+		} else if (stat == 2) {
+			/* The driver can't drive this FS. */
+			continue;
+		} else {
+			/* Another error occured. TODO: add proper error detection. */
+			kfree(nfs);
 			return 1;
 		}
-	} else {
-		nfs->fs_type = FS_UNKNOWN;
 	}
 
-	kfree(first_sector);
 
 	/* We can add this to the list. */
 	if (root_fs == NULL) {
 		root_fs = nfs;
-
 		return 0;
 	}
 	if (nfs->fs_type == FS_FAT16) {
@@ -275,14 +289,13 @@ uint8_t register_fs(uint16_t drive_id, uint64_t starting_sector, uint64_t sector
 		return 0;
 	}
 
-	//find the last entry, in order to add our new fs to the end.
+	/* Finds the last fs in the list, then adds nfs to the end. s*/
 	struct file_system* f = root_fs;
 	while (f->next != NULL) {
 		f = f->next;
 	}
 
 	f->next = nfs;
-
 	return 0;
 };
 
@@ -352,7 +365,6 @@ uint8_t fs_init() {
 
 		i = i->next;
 	}
-
 
 	kfree(buf);
 

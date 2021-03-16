@@ -105,7 +105,7 @@ uint8_t fat16_load_bpb(struct file_system *fs) {
 
 	if ((bpb->signature != 0x28) && (bpb->signature != 0x29)) {
 		kfree(bpb);
-		return 1;
+		return 2;
 	}
 
 	fs->special = bpb;
@@ -291,7 +291,7 @@ FAT16_DIR_ENTRY *fat16_search_directory(struct file_system *fs, char *file_name,
 
 
 
-FAT16_FILE *fat16_file_lookup(struct file_system *fs, char *full_path) {
+void *fat16_file_lookup(struct file_system *fs, char *full_path) {
 	/* Finds a file on the FAT16 file system, and loads some information about it. */
 	// TODO: Complete this proper.
 
@@ -403,15 +403,16 @@ FAT16_FILE *fat16_file_lookup(struct file_system *fs, char *full_path) {
 
 
 
-uint8_t fat16_read_file(struct file_system *fs, FAT16_FILE *file, void* buf, uint32_t offset, uint32_t bytes) {
+uint8_t fat16_read_file(struct file_system *fs, void *file_void, void *buf, size_t offset, size_t bytes) {
 	/* Reads some amount of bytes at some offset from some file. */
 
-
-
+	FAT16_FILE *f = file_void;
+	offset = (size_t)((uint32_t)offset);
+	bytes = (size_t)((uint32_t)bytes);
 	if (fs == NULL) {
 		return 1;
 	}
-	if (file == NULL) {
+	if (f == NULL) {
 		return 1;
 	}
 	if (buf == NULL) {
@@ -421,7 +422,7 @@ uint8_t fat16_read_file(struct file_system *fs, FAT16_FILE *file, void* buf, uin
 		return 0;	/* Nothing to do.*/
 	}
 
-	FAT16_DIR_ENTRY *entry = file->entry;	/* File's directory entry. */
+	FAT16_DIR_ENTRY *entry = f->entry;	/* File's directory entry. */
 
 	if (entry == NULL) {
 		return 1;
@@ -432,16 +433,12 @@ uint8_t fat16_read_file(struct file_system *fs, FAT16_FILE *file, void* buf, uin
 	}
 
 
-
 	FAT16_BPB *bpb = fs->special;
 
 
 	if (bpb == NULL) {
 		return 1;
 	}
-
-
-
 
 	uint64_t root_dir_sectors = ((bpb->num_dir_entries * 32) + (bpb->bytes_per_sector - 1)) / bpb->bytes_per_sector;
 	uint64_t first_data = bpb->reserved_sectors + (bpb->num_fats * bpb->sectors_per_fat) + root_dir_sectors;
@@ -531,22 +528,26 @@ uint8_t fat16_read_file(struct file_system *fs, FAT16_FILE *file, void* buf, uin
 };
 
 
-uint8_t fat16_write_file(struct file_system *fs, FAT16_FILE *file, void* buf, uint32_t offset, uint32_t bytes) {
+uint8_t fat16_write_file(struct file_system *fs, void *file_void, void* buf, size_t offset, size_t bytes) {
 	/* Reads some bytes at some offset from some file. */
 
+	FAT16_FILE *f = file_void;
+
+	offset = (size_t)((uint32_t)offset);
+	bytes = (size_t)((uint32_t)bytes);
 	/* Some checks first. */
-	if (fs == NULL) 							return 1;
-	if (file == NULL) 							return 1;
-	if (buf == NULL) 							return 1;
-	if (bytes == 0)						return 0;
-	if (file->entry == NULL) 					return 1;
-	if ((offset + bytes) > file->entry->file_size) return 1;
-	if (fs->special == NULL)					return 1;
+	if (fs == NULL)                             { return 1; }
+	if (f == NULL)                              { return 1; }
+	if (buf == NULL)                            { return 1; }
+	if (bytes == 0)                             { return 0; }
+	if (f->entry == NULL)                     { return 1; }
+	if ((offset + bytes) > f->entry->file_size) return 1;
+	if (fs->special == NULL)                    { return 1; }
 
 
 
 	FAT16_BPB *bpb = fs->special;
-	FAT16_DIR_ENTRY *entry = file->entry;
+	FAT16_DIR_ENTRY *entry = f->entry;
 
 
 	uint64_t root_dir_sectors = ((bpb->num_dir_entries * 32) + (bpb->bytes_per_sector - 1)) / bpb->bytes_per_sector;
@@ -569,11 +570,6 @@ uint8_t fat16_write_file(struct file_system *fs, FAT16_FILE *file, void* buf, ui
 
 		offset -= cluster_size;
 	}
-
-
-
-
-
 
 
 	/* We need to actually construct the buffer we will write to disk.
@@ -641,8 +637,6 @@ uint8_t fat16_write_file(struct file_system *fs, FAT16_FILE *file, void* buf, ui
 	memcpy(temp_buf + offset_b, buf, bytes);
 
 	/* Now our buffer is complete, and we can write it to disk without worry. */
-
-
 
 
 

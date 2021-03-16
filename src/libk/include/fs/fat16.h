@@ -83,10 +83,10 @@ char **fat16_parse_path(char *, uint32_t *);
 
 uint16_t fat16_get_FAT_entry(struct file_system *, uint32_t);
 uint8_t fat16_load_bpb(struct file_system*);
-FAT16_FILE *fat16_file_lookup(struct file_system *, char *);
+void *fat16_file_lookup(struct file_system *, char *);
 uint8_t fat16_name_compare(char *, char *, char *);
-uint8_t fat16_read_file(struct file_system *, FAT16_FILE *, void *, uint32_t, uint32_t);
-uint8_t fat16_write_file(struct file_system *, FAT16_FILE *, void *, uint32_t, uint32_t);
+uint8_t fat16_read_file(struct file_system *, void *f, void *, size_t, size_t);
+uint8_t fat16_write_file(struct file_system *, void *f, void *, size_t, size_t);
 
 #ifdef __cplusplus
 }

@@ -6,83 +6,6 @@
 #include <fs/fat16.h>
 
 
-int32_t vfs_assign_file_des(struct file_vnode *node, struct task *t, uint8_t mode, uint8_t flags) {
-	/* Creates a new file descriptor for a given node. */
-
-	struct file *f = kmalloc(sizeof(struct file));
-	if (f == NULL) {
-		return -1;
-	}
-	f->node = node;
-	f->mode = mode;
-	f->flags = flags;
-	f->position = 0;
-	f->next = NULL;
-	f->prev = NULL;
-
-	/* Now assign the freshly-created file a valid descriptor. */
-	int32_t i = 0;
-	struct file *fi = t->files;
-
-	if (fi == NULL) {
-		/*
-		 * The below loop relies on fi->next being NULL. this obviously breaks a lot of
-		 * things if fi is NULL before the loop.
-		 */
-
-		f->file_des = i;
-		t->files = f;
-		switch (mode) {
-			case FD_READ:
-				node->reader_count++;
-				break;
-
-			case FD_WRITE:
-				node->writer_count++;
-				break;
-
-			default:
-				break;
-		}
-
-		return f->file_des;
-	}
-
-	do {
-		if (fi->file_des == i) {
-			/* This file descriptor is used. Try the next number. */
-			i++;
-			fi = t->files;
-			continue;
-		}
-
-		fi = fi->next;
-	} while (fi->next != NULL);
-
-	/* We found an available file descriptor. Now we should add this to
-	 * the process' list of files.
-	 */
-	f->file_des = i;
-	fi->next = f;
-	f->prev = fi;
-
-	switch (mode) {
-		case FD_READ:
-			node->reader_count++;
-			break;
-
-		case FD_WRITE:
-			node->writer_count++;
-			break;
-
-		default:
-			break;
-	}
-
-	return f->file_des;
-}
-
-
 struct file *vfs_fd_lookup(struct task *t, int32_t file_des) {
 	struct file *i = t->files;
 
@@ -142,7 +65,7 @@ int32_t open_file(struct file_vnode *node, struct task *t, uint8_t mode) {
 	}
 
 	/* Keep the fd in a variable, because we need to release the semaphore. */
-	int32_t fd = vfs_assign_file_des(node, t, mode, 0);
+	int32_t fd = vfs_create_descriptor(t, node, mode, 0);
 
 	release_semaphore(node->mutex);
 	return fd;
@@ -176,7 +99,7 @@ int32_t open_pipe(struct file_vnode *node, struct task *t, uint8_t mode) {
 	}
 
 	/* Keep the fd in a variable, because we need to release the semaphore. */
-	int32_t fd = vfs_assign_file_des(node, t, mode, 0);
+	int32_t fd = vfs_create_descriptor(t, node, mode, 0);
 
 	release_semaphore(node->mutex);
 	return fd;

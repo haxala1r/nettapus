@@ -13,45 +13,32 @@ int64_t read_file(struct file *f, void *buf, size_t bytes) {
 	 * and copies it to buf.
 	 */
 
-	if (f == NULL)                  { return -1; }
-	if (f->node == NULL)            { return -1; }
-	if (f->node->fs == NULL)        { return -1; }
-	if (f->node->mutex == NULL)     { return -1; }
+	if (f == NULL)                    { return -1; }
+	if (f->node == NULL)              { return -1; }
+	if (f->node->fs == NULL)          { return -1; }
+	if (f->node->fs->driver == NULL)  { return -1; }
+	if (f->node->mutex == NULL)       { return -1; }
+	if (f->mode != 0)                 { return -1; }
 
-	if (f->mode != 0)               { return -1; }
+	acquire_semaphore(f->node->mutex);
 
-
-	struct file_vnode *node = f->node;
-	acquire_semaphore(node->mutex);
-
-
-	/* Status is going to be stored here. */
-	uint8_t status = 0;
-
-	/* Determine the amount of bytes that can be read, and read it. */
+	/* Determine the amount of bytes that can be read */
 	size_t to_read = bytes;
-	if ((f->position + to_read) > node->last) {
-		to_read = node->last - f->position;
+	if ((f->position + to_read) > f->node->last) {
+		to_read = f->node->last - f->position;
 	}
 
-	/* Now we need to consult the relevant FS driver. */
-	switch (node->fs->fs_type) {
-		case FS_USTAR: 	status = ustar_read_file(node->fs, node->special, buf, f->position, (uint32_t)to_read); break;
-		case FS_FAT16:	status = fat16_read_file(node->fs, node->special, buf, f->position, (uint32_t)to_read); break;
-		case 0xFF: 		status = 0xFF; break;
-	}
+	uint8_t status = f->node->fs->driver->read(f->node->fs, f->node->special, buf, f->position, to_read);
 
-
-	/* Now we can check for status, then return. */
 	if (status) {
-		release_semaphore(node->mutex);
-		return -1;
+		release_semaphore(f->node->mutex);
+		return -status;
 	}
 
 	/* Return the amount of bytes that were actually read.*/
 	f->position += to_read;
 
-	release_semaphore(node->mutex);
+	release_semaphore(f->node->mutex);
 	return to_read;
 };
 

@@ -92,8 +92,8 @@ uint8_t vfs_destroy_node(struct file_vnode *node) {
 	if (node->reader_count != 0) { return 1; }
 	if (node->writer_count != 0) { return 1; }
 
-
 	/* First we need to unlink the node. */
+	acquire_semaphore(node->mutex);
 	acquire_semaphore(&vnodes_semaphore);
 	if (node->next != NULL) {
 		node->next->prev = node->prev;
@@ -105,7 +105,7 @@ uint8_t vfs_destroy_node(struct file_vnode *node) {
 		vnodes = vnodes->next;
 	}
 	release_semaphore(&vnodes_semaphore);
-
+	release_semaphore(node->mutex);
 
 	/* Now we can safely free the node. */
 	if (node->special != NULL) {
@@ -135,7 +135,15 @@ uint8_t vfs_destroy_node(struct file_vnode *node) {
 };
 
 struct file_vnode *vfs_vnode_lookup(char *file_name) {
-	/* Finds a vnode given a file name. */
+	/* Finds a vnode given a file name.
+	 *
+	 * TODO: Since the entire list has just one
+	 * semaphore, this slows things A WHOLE FUCKING LOT. This should be fixed,
+	 * and the vnodes should take a more hierarchical structure, so that one
+	 * task creating a new node doesn't stop another task reading from an
+	 * unrelated pipe.
+	 */
+	acquire_semaphore(&vnodes_semaphore);
 
 	struct file_vnode *i = vnodes;
 
@@ -145,10 +153,38 @@ struct file_vnode *vfs_vnode_lookup(char *file_name) {
 		}
 		i = i->next;
 	}
+	release_semaphore(&vnodes_semaphore);
 	return i;
 };
 
 
+#ifdef DEBUG
+#include <tty.h>
 
+void vfs_print_nodes() {
+	kputs("VNODES: \n {NAME}: {TYPE} {LAST} {ADDRESS} {READER C} {WRITER C}\n");
 
+	struct file_vnode *i = vnodes;
 
+	while (i) {
+		kputs(i->file_name);
+		kputs(": ");
+
+		kputx(i->type);
+		kputs(" ");
+		kputx(i->last);
+		kputs(" ");
+
+		kputx((uintptr_t)i);
+		kputs(" ");
+
+		kputx(i->reader_count);
+		kputs(" ");
+		kputx(i->writer_count);
+		kputs("\n");
+
+		i = i->next;
+	}
+};
+
+#endif
