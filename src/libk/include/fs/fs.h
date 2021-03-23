@@ -13,8 +13,7 @@ extern "C" {
 #define FS_UNKNOWN   0
 #define FS_USTAR     1
 #define FS_FAT16     2
-
-
+#define FS_EXT2      3
 
 
 /* Vnode types 						*/
@@ -46,9 +45,10 @@ struct file_system;
 
 
 struct fs_driver {
-	/* Loads any necessary information on a file_system, and performs initialisation.
-	 * It MUST return an 0x2 if the file system supplied to it isn't a file system
-	 * it can drive. Return 0 if FS can be driven.
+	/* Loads any necessary information on a file_system, and performs
+	 * initialisation.
+	 * It MUST return an ERR_INCOMPAT_PARAM if the file system supplied to it
+	 * isn't a file system it can drive. Return 0 if FS can be driven.
 	 */
 	uint8_t (*init_fs)(struct file_system *fs);
 
@@ -68,6 +68,7 @@ struct fs_driver {
 	                size_t bytes);
 	uint8_t (*write)(struct file_system *fs, void *f, void *buf, size_t offset,
 	                 size_t bytes);
+	size_t (*get_size)(void *f);
 
 	size_t type;	/* What file system it drives. */
 };

@@ -107,11 +107,11 @@ void _start(struct stivale2_struct *hdr) {
 	 * need to initialise the file system etc. before the console is ready.
 	 */
 	uint64_t fb_len = fb_width * fb_bpp/8 + fb_height * fb_pitch;
-	map_memory(fb_addr, 0xFFFFFFFF00000000 + fb_addr, fb_len/0x1000, kgetPML4T());
+	map_memory(fb_addr, 0xFFFFFFFFFB000000, fb_len/0x1000, kgetPML4T());
 
 	krefresh_vmm();		/* Refresh the page tables. */
 
-	vga_init(0xFFFFFFFF00000000 + fb_addr, fb_width, fb_height, fb_bpp, fb_pitch);
+	vga_init(0xFFFFFFFFFB000000, fb_width, fb_height, fb_bpp, fb_pitch);
 
 
 
@@ -147,10 +147,12 @@ void _start(struct stivale2_struct *hdr) {
 
 	/* The TTY driver takes a file name as its init function's only parameter. This file
 	 * contains the fonts used by the driver itself. This is the reason we have to initialise
-	 * the FS drivers *before* TTY.*/
-	if (tty_init("/fonts/lat9-08.psf")) {
+	 * the FS drivers *before* TTY.
+	 */
+	if (tty_init("lat9-08.psf")) {
 		kpanic();
 	}
+
 	if (init_kbd()) {
 		kpanic();
 	}

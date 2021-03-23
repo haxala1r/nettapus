@@ -36,32 +36,14 @@ int32_t open_file(struct file_vnode *node, struct task *t, uint8_t mode) {
 
 	/* Load FS-specific info about the file if not loaded already. */
 	if (node->special == NULL) {
-		switch (node->fs->fs_type) {
-		case FS_USTAR:
-			node->special = ustar_file_lookup(node->fs, node->file_name);
-
-			if (node->special != NULL) {
-				node->last = ((USTAR_FILE_t*)(node->special))->size;
-			}
-			break;
-
-		case FS_FAT16:
-			node->special = fat16_file_lookup(node->fs, node->file_name);
-
-			if (node->special != NULL) {
-				node->last = ((FAT16_FILE *)(node->special))->entry->file_size;
-			}
-			break;
-
-		default:
-			node->special = NULL;
-			break;
-		}
+		node->special = node->fs->driver->open(node->fs, node->file_name);
 
 		if (node->special == NULL) {
 			release_semaphore(node->mutex);
 			return -1;
 		}
+
+		node->last = node->fs->driver->get_size(node->special);
 	}
 
 	/* Keep the fd in a variable, because we need to release the semaphore. */

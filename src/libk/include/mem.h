@@ -1,10 +1,6 @@
 #ifndef _MEM_H
 #define _MEM_H 1
 
-#ifndef GENERIC_SUCCESS
-#define GENERIC_SUCCESS 0
-#endif
-
 
 #ifdef __cplusplus
 extern "C" {
@@ -16,9 +12,9 @@ extern "C" {
 #include <string.h>
 #include <stivale2.h>
 
-/* 
+/*
  * Loading a Page-Map Level 4 Table is one of the rare things we can't do in C. Because
- * of this, they are defined in an assembly file. 
+ * of this, they are defined in an assembly file.
  */
 extern void  loadPML4T(volatile uint64_t*);
 
@@ -44,7 +40,7 @@ struct memory_block {
 
 
 struct memory_map {
-	struct memory_block blocks[32]; 		//32 blocks at most. 
+	struct memory_block blocks[32]; 		//32 blocks at most.
 	uint64_t num_blocks;						//total number of blocks.
 	uint64_t bitmap[98304];					//This is equal to 24 GB
 }; //lists total available physical memory and provides bitmaps for each of them.
@@ -58,24 +54,24 @@ typedef struct memory_map memory_map_t;
 
 
 
-/* 
+/*
  * VMM.
- * 
- * There is only one structure that is used for PD, PDPT and PML4T. 
- * This is because even though they're supposed to be different things, they all have 
+ *
+ * There is only one structure that is used for PD, PDPT and PML4T.
+ * This is because even though they're supposed to be different things, they all have
  * the same structure (512 uint64_t's). And thus, declaring multiple structs is unnecessary,
  * as they will all contain the same things anyway. This may change later on.
  */
 struct page_struct {
 	volatile uint64_t entries[512] __attribute__((aligned(4096))); //at most 1024 entries.
-	
-	/* 
+
+	/*
 	 * This stores all the lower-level tables' virtual addresses, so that we can actually
 	 * change them more easily. This is simply not used for a page table, so it has its own struct,
 	 * to avoid wasting memory.
-	 */	
+	 */
 	void* child[512];
-	
+
 	/* This is stored here for convenience. */
 	uintptr_t physical_address;
 }	__attribute__((aligned(4096))) __attribute__((packed));
@@ -84,11 +80,11 @@ struct page_struct {
 
 
 /* Page tables, however, have their own struct. This is simply because they are the lowest
- * tables in the hierarchy, and thus don't need the lower[] field. 
+ * tables in the hierarchy, and thus don't need the lower[] field.
  */
 struct page_table {
 	volatile uint64_t entries[512] __attribute__((aligned(4096)));
-	
+
 	uintptr_t physical_address;
 } __attribute__((aligned(4096))) __attribute__((packed));
 
@@ -108,7 +104,7 @@ struct chunk_header {
 	 * That means you need to do a " + sizeof(chunk_header_t)" to determine the actual size
 	 * a chunk occupies, along with its header.
 	 */
-	uint32_t size;	
+	uint32_t size;
 	struct chunk_header *prev;
 	struct chunk_header *next;
 	/* Right here is where the data section of the chunk goes.
@@ -122,8 +118,8 @@ struct heap {
 	/* This points to the first free block in the heap. Chunks are in a doubly-linked list.
 	 * Keep in mind that the list excludes used chunks.
 	 */
-	struct chunk_header* first_free;	
-	uint64_t min_size;	//minimum size of a chunk. 
+	struct chunk_header* first_free;
+	uint64_t min_size;	//minimum size of a chunk.
 	uint64_t start;	//starting address of the heap.
 	uint64_t end;	//ending address of the heap.
 };
@@ -182,7 +178,7 @@ uint8_t init_vmm();											//Virtual  Memory Manager (TM)
 uint8_t init_heap();										//Heap			  Manager (TM)
 
 //initialises everything (a.k.a. calls the three functions declared above.)
-uint8_t init_memory(struct stivale2_struct_tag_memmap*);	
+uint8_t init_memory(struct stivale2_struct_tag_memmap*);
 
 
 
@@ -197,6 +193,6 @@ void heap_print_state();
 
 #ifdef __cplusplus
 }
-#endif 
+#endif
 
 #endif /* _MEM_H*/

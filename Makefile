@@ -9,7 +9,7 @@ AS := nasm
 # This is the emulator to run the image on. Currently we use QEMU.
 EMUL := qemu-system-x86_64 -cpu qemu64 
 
-KERNELFLAGS := -O2 -std=c99 -Wall -Wextra -mcmodel=large -fno-pic -fno-stack-protector -mno-red-zone \
+KERNELFLAGS := -Og -std=c99 -Wall -Wextra -mcmodel=large -fno-pic -fno-stack-protector -mno-red-zone \
 	-ffreestanding -nostdlib --sysroot="src/" -isystem="/libk/include/" 
 
 # Uncomment this while debugging. 
@@ -38,20 +38,16 @@ all: bios
 
 bios: kernel
 	@dd if=/dev/zero of=$(IMG) bs=1M count=128
-	@echo -e "2048 196608 0x80 *\n198656 63488 0x06 -" | sfdisk $(IMG)
-	@dd if=/dev/zero of=fat.img bs=512 count=196608 	# This is the first partition (FAT32) for the bootloader. 
-	@mkfs.fat -F 32 -n "NETTAPUS" fat.img
-	@mcopy -s -i fat.img root/boot/limine.cfg ::/
-	@mcopy -s -i fat.img root/* ::/
-	@mcopy -s -i fat.img root/boot/kernel.elf ::/kernel.elf # Limine breaks if we don't do this. No idea why.
-	@dd if=fat.img of=$(IMG) bs=512 seek=2048 conv=notrunc
+	@echo -e "2048 196608 0x80 *\n" | sfdisk $(IMG)
+	# The only partition (EXT2)
+	@dd if=/dev/zero of=temp.img bs=512 count=196608
+	@mkfs.ext2 temp.img
+	@./ext2.sh
+	@dd if=temp.img of=$(IMG) bs=512 seek=2048 conv=notrunc
 	@sync
-	@dd if=/dev/zero of=fat.img bs=512 count=63488		# This is the second partition (FAT16).
-	@mkfs.fat -F 16 -n "NETTAPUS" fat.img
-	@mcopy -s -i fat.img root/* ::/
-	@dd if=fat.img of=$(IMG) bs=512 seek=198656 conv=notrunc
 	@limine-install $(IMG)					# Install limine.
-	@$(RM) fat.img
+	@$(RM) temp.img
+	@echo "Build done, you can run using 'make qemu'"
 
 kernel: $(KERNELOBJ) libk.a
 	@$(CC) $(KERNELLINK) -T "src/kernel/link.ld" -o "root/boot/kernel.elf" $?
@@ -68,11 +64,11 @@ libk.a: $(LIBKOBJ)
 	@$(AS) -f elf64 $< -o $@
 
 qemu: 
-	@$(EMUL) -drive file=$(IMG),format=raw
+	@$(EMUL) -drive file=$(IMG),format=raw  
 
 
 clean:
 	@$(RM) $(KERNELOBJ) $(LIBKOBJ) "root/boot/kernel.elf"
-	@$(RM) *.o *.a
+	@$(RM) *.o *.a *.img
 
 

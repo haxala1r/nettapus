@@ -1,0 +1,37 @@
+
+0xFFFFFFFF80000000 and up is reserved for kernel use.
+
+0xFFFFFFFF80200000
+      |
+      |
+      |-------------> The kernel binary.
+      |
+      |
+0xFFFFFFFF80400000
+      |
+      |
+      |-------------> Kernel modules & their stacks (WIP).
+      |
+      |
+0xFFFFFFFF90000000
+      |
+      |
+      |-------------> Used to allocate space for paging structures (tables etc.)
+      |
+      |
+0xFFFFFFFF90400000
+      |
+      |
+      |-------------> CURRENTLY UNUSED.
+      |
+      |
+0xFFFFFFFFA0000000
+      |
+      |
+      |-------------> Kernel heap.
+      |
+      |
+0xFFFFFFFFA0100000
+
+The rest is currently unused, except for 0xFFFFFFFFFB000000, which is mapped to
+the linear framebuffer set up by the bootloader.

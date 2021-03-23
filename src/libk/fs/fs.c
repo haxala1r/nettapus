@@ -3,33 +3,48 @@
 #include <fs/fs.h>
 #include <disk/ide.h>
 #include <mem.h>
+#include <err.h>
+
 #include <fs/ustar.h>
 #include <fs/fat16.h>
+#include <fs/ext2.h>
 
 
 const struct fs_driver fat16_driver = {
-	.init_fs = fat16_load_bpb,
-	.open = fat16_file_lookup,
-	.close = NULL,
-	.read = fat16_read_file,
-	.write = fat16_write_file,
+	.init_fs     = fat16_load_bpb,
+	.open        = fat16_file_lookup,
+	.close       = NULL,
+	.read        = fat16_read_file,
+	.write       = fat16_write_file,
+	.get_size    = NULL,
 
-	.type = FS_FAT16
+	.type        = FS_FAT16
+};
+
+const struct fs_driver ext2_driver = {
+	.init_fs    = ext2_init_fs,
+	.open       = ext2_open_file,
+	.close      = NULL,
+	.read       = ext2_read_file,
+	.write      = NULL,
+	.get_size   = ext2_get_size,
+
+	.type       = FS_EXT2
 };
 
 /* This is a list of all FS drivers in the system. These will (hopefully) be
  * loaded at run-time in the future, in form of kernel modules.
  */
-struct fs_driver fs_drivers[2] = {
+struct fs_driver fs_drivers[16] = {
 	fat16_driver,
-	{}
+	ext2_driver
 };
 
 /* Will be incremented every time a driver is added. */
-size_t fs_drivers_count = 1;
+size_t fs_drivers_count = 2;
 
 
-struct file_system *root_fs;
+struct file_system *root_fs = NULL;
 
 
 
@@ -37,9 +52,9 @@ struct file_system *fs_get_root() {
 	return root_fs;
 };
 
-uint8_t fs_read_sectors(struct file_system *fs, uint64_t lba, uint32_t sector_count, void* buf) {
+uint8_t fs_read_sectors(struct file_system *fs, uint64_t lba, uint32_t sector_count, void *buf) {
 	if ((lba + sector_count) > (fs->sector_count)) {
-		return 1;
+		return ERR_INVALID_PARAM;
 	}
 
 	/* Now we need to perform the disk access. 0x0FFFFFFF is the maximum LBA that can be
@@ -52,7 +67,7 @@ uint8_t fs_read_sectors(struct file_system *fs, uint64_t lba, uint32_t sector_co
 
 		/* Attempt a regular 28-bit PIO read.*/
 		if (ide_pio_read28(fs->drive_id, fs->starting_sector + lba, (uint8_t)sector_count, (uint16_t*)buf)) {
-			return 1;
+			return ERR_DISK;
 		}
 
 	} else if (sector_count <= 65536) {
@@ -62,7 +77,7 @@ uint8_t fs_read_sectors(struct file_system *fs, uint64_t lba, uint32_t sector_co
 
 		/* Attempt a regular 48-bit PIO read.*/
 		if (ide_pio_read48(fs->drive_id, fs->starting_sector + lba, (uint16_t)sector_count, (uint16_t*)buf)) {
-			return 1;
+			return ERR_DISK;
 		}
 
 	} else  {
@@ -75,7 +90,7 @@ uint8_t fs_read_sectors(struct file_system *fs, uint64_t lba, uint32_t sector_co
 			}
 
 			if (ide_pio_read28(fs->drive_id, fs->starting_sector + lba, (uint8_t)i, (uint16_t*)i_buf)) {
-				return 1;
+				return ERR_DISK;
 			}
 
 			sector_count -= i;
@@ -84,13 +99,13 @@ uint8_t fs_read_sectors(struct file_system *fs, uint64_t lba, uint32_t sector_co
 		}
 	}
 
-	return 0;
+	return GENERIC_SUCCESS;
 };
 
 
 uint8_t fs_write_sectors(struct file_system* fs, uint64_t lba, uint32_t sector_count, void* buf) {
 	if ((lba + sector_count) > (fs->sector_count)) {
-		return 1;
+		return ERR_INVALID_PARAM;
 	}
 
 	/* Now we need to perform the disk access. 0x0FFFFFFF is the maximum LBA that can be
@@ -103,7 +118,7 @@ uint8_t fs_write_sectors(struct file_system* fs, uint64_t lba, uint32_t sector_c
 
 		/* Attempt a regular 28-bit write. */
 		if (ide_pio_write48(fs->drive_id, fs->starting_sector + lba, (uint8_t)sector_count, (uint16_t*)buf)) {
-			return 1;
+			return ERR_DISK;
 		}
 
 
@@ -114,7 +129,7 @@ uint8_t fs_write_sectors(struct file_system* fs, uint64_t lba, uint32_t sector_c
 
 		/* Attempt a regular 48-bit PIO write.*/
 		if (ide_pio_read48(fs->drive_id, fs->starting_sector + lba, (uint16_t)sector_count, (uint16_t*)buf)) {
-			return 1;
+			return ERR_DISK;
 		}
 
 	} else  {
@@ -132,7 +147,7 @@ uint8_t fs_write_sectors(struct file_system* fs, uint64_t lba, uint32_t sector_c
 			}
 
 			if (ide_pio_write28(fs->drive_id, fs->starting_sector + lba, (uint8_t)i, (uint16_t*)i_buf)) {
-				return 1;
+				return ERR_DISK;
 			}
 
 			sector_count -= i;
@@ -141,8 +156,7 @@ uint8_t fs_write_sectors(struct file_system* fs, uint64_t lba, uint32_t sector_c
 		}
 	}
 
-
-	return 0;
+	return GENERIC_SUCCESS;
 };
 
 
@@ -160,7 +174,6 @@ uint8_t fs_read_bytes(struct file_system* fs, void* buf, uint32_t sector, uint16
 	uint32_t sector_count = (bytes / 512) + ((bytes % 512) + 511)/512 + 1;
 
 
-
 	uint8_t* temp_buf = kmalloc(sector_count * 512);
 
 	if (fs_read_sectors(fs, sector, sector_count, temp_buf)) {
@@ -173,7 +186,7 @@ uint8_t fs_read_bytes(struct file_system* fs, void* buf, uint32_t sector, uint16
 
 
 	kfree(temp_buf);
-	return 0;
+	return GENERIC_SUCCESS;
 };
 
 
@@ -250,29 +263,36 @@ uint8_t fs_write_bytes(struct file_system *fs, void *buf, uint32_t sector, uint1
 
 uint8_t register_fs(uint16_t drive_id, uint64_t starting_sector, uint64_t sector_count) {
 	struct file_system *nfs = kmalloc(sizeof(struct file_system));
+	if (nfs == NULL) { return ERR_OUT_OF_MEM; }
+
+	memset(nfs, 0, sizeof(struct file_system));
 	nfs->drive_id = drive_id;
 
 	nfs->starting_sector = starting_sector;
 	nfs->sector_count = sector_count;
 	nfs->next = NULL;
-
+	nfs->fs_type = FS_UNKNOWN;
 
 	/* Determine the file system used. */
 
 	for (size_t i = 0; i < fs_drivers_count; i++) {
+		if (fs_drivers[i].init_fs == NULL) {
+			continue;
+		}
+
 		uint8_t stat = fs_drivers[i].init_fs(nfs);
 
-		if (stat == 0) {
-			nfs->fs_type = fs_drivers[i].type;
+		if (stat == GENERIC_SUCCESS) {
 			nfs->driver = fs_drivers + i;
+			nfs->fs_type = nfs->driver->type;
 			break;
-		} else if (stat == 2) {
+		} else if (stat == ERR_INCOMPAT_PARAM) {
 			/* The driver can't drive this FS. */
 			continue;
 		} else {
-			/* Another error occured. TODO: add proper error detection. */
+			/* Another error occured.  */
 			kfree(nfs);
-			return 1;
+			return stat;
 		}
 	}
 
@@ -280,13 +300,13 @@ uint8_t register_fs(uint16_t drive_id, uint64_t starting_sector, uint64_t sector
 	/* We can add this to the list. */
 	if (root_fs == NULL) {
 		root_fs = nfs;
-		return 0;
+		return GENERIC_SUCCESS;
 	}
-	if (nfs->fs_type == FS_FAT16) {
+	if (nfs->fs_type == FS_EXT2) {
 		/* Right now, FAT16 gets priority */
 		nfs->next = root_fs;
 		root_fs = nfs;
-		return 0;
+		return GENERIC_SUCCESS;
 	}
 
 	/* Finds the last fs in the list, then adds nfs to the end. s*/
@@ -296,7 +316,7 @@ uint8_t register_fs(uint16_t drive_id, uint64_t starting_sector, uint64_t sector
 	}
 
 	f->next = nfs;
-	return 0;
+	return GENERIC_SUCCESS;
 };
 
 
@@ -305,7 +325,7 @@ uint8_t fs_parse_mbr(uint16_t drive_id) {
 
 	if (ide_pio_read28(drive_id, 0, 1, (uint16_t*)mbr)) {
 		kfree(mbr);
-		return 1;
+		return ERR_DISK;
 	}
 
 	/* Go through all entries. */
@@ -314,20 +334,22 @@ uint8_t fs_parse_mbr(uint16_t drive_id) {
 
 		/* Check the Partition Type field. If non-zero, the partition is used. */
 		if (mbr[0x1BE + i * 0x10 + 4] != 0) {
+			uint8_t stat = register_fs(drive_id, lmbr[2], lmbr[3]);
 
-			if (register_fs(drive_id, lmbr[2], lmbr[3])) {
-				return 1;
+			if (stat) {
+				kfree(mbr);
+				return stat;
 			};
-
 		}
 	}
 
 	kfree(mbr);
-	return 0;
+	return GENERIC_SUCCESS;
 };
 
 uint8_t fs_parse_gpt(uint16_t drive_id) {
-	return 0;
+	drive_id;
+	return GENERIC_SUCCESS;
 };
 
 
@@ -336,10 +358,9 @@ uint8_t fs_parse_gpt(uint16_t drive_id) {
 uint8_t fs_init() {
 	/* Goes over all available drives, and finds every filesystem it can recognize. */
 
-	ide_drive_t* i = ide_get_first_drive();
-	uint8_t* buf = kmalloc(512);
+	ide_drive_t *i = ide_get_first_drive();
+	uint8_t *buf = kmalloc(512);
 
-	/* Will count all errors instead of kpanic()'ing.*/
 	uint8_t ret_code = 0;
 
 	while (i != NULL) {
@@ -353,14 +374,14 @@ uint8_t fs_init() {
 		/* For GPT, first 8 bytes of LBA 1 must read "EFI PART" */
 		if (memcmp((uint8_t*)buf, "EFI PART", 8)) {
 			/* MBR. */
-			if (fs_parse_mbr(i->drive_id)) {
-				ret_code++;
+			ret_code = fs_parse_mbr(i->drive_id);
+			if (ret_code == ERR_INCOMPAT_PARAM) {
+				/* The device either isn't partitioned, or doesn't have an fs. */
+				break;
 			}
 		} else {
 			/* GPT */
-			if (fs_parse_gpt(i->drive_id)) {
-				ret_code++;
-			}
+			ret_code = fs_parse_gpt(i->drive_id);
 		}
 
 		i = i->next;
@@ -370,11 +391,12 @@ uint8_t fs_init() {
 
 	/* Check for more errors, and return. */
 	if (root_fs == NULL) {
-		return ++ret_code;
+		return ERR_NO_RESULT;
 	}
-	if (root_fs->fs_type == 0xFF) {
-		return 0xFF;
+	if (root_fs->fs_type == FS_UNKNOWN) {
+		return ERR_NO_RESULT;
 	}
+
 	return ret_code;
 }
 

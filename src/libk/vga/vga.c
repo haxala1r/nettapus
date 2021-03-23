@@ -1,6 +1,7 @@
 
 #include <stdint.h>
 #include <vga.h>
+#include <err.h>
 
 uint64_t FB_ADDR;
 uint32_t* FB;
@@ -45,11 +46,11 @@ uint8_t vga_init(uintptr_t fb_addr, uint64_t fb_width, uint64_t fb_height, uint6
 	FB_height 	= fb_height;
 	FB_bpp 		= fb_bpp;
 	FB_pitch 	= fb_pitch;
-	
+
 	FB = (uint32_t*) FB_ADDR;
-	
+
 	vga_fill_screen(0);
-	
-	return 0;
+
+	return GENERIC_SUCCESS;
 };
 

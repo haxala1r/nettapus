@@ -3,6 +3,7 @@
 #include <fs/fat16.h>
 #include <fs/fs.h>
 #include <mem.h>
+#include <err.h>
 
 
 uint8_t fat16_name_compare(char *fname, char *fat_name, char *fat_extension) {
@@ -13,7 +14,7 @@ uint8_t fat16_name_compare(char *fname, char *fat_name, char *fat_extension) {
 	 */
 
 	if (strlen(fname) > 12) {
-		return 1;	/* They *can't* be the same. */
+		return ERR_INVALID_PARAM;	/* They *can't* be the same. */
 	}
 
 	/* Create our own copy of the string. */
@@ -49,24 +50,24 @@ uint8_t fat16_name_compare(char *fname, char *fat_name, char *fat_extension) {
 
 	if (name_len > 8) {
 		kfree(file_name);
-		return 1;
+		return ERR_INVALID_PARAM;
 	}
 	if (strlen(extension) > 3) {
 		kfree(file_name);
-		return 1;
+		return ERR_INVALID_PARAM;
 	}
 
 	if (memcmp(name, fat_name, name_len)) {
 		kfree(file_name);
-		return 1;
+		return ERR_INVALID_PARAM;
 	}
 	if (memcmp(extension, fat_extension, strlen(extension))) {
 		kfree(file_name);
-		return 1;
+		return ERR_INVALID_PARAM;
 	}
 
 	kfree(file_name);
-	return 0;
+	return GENERIC_SUCCESS;
 };
 
 
@@ -96,20 +97,21 @@ uint8_t fat16_load_bpb(struct file_system *fs) {
 	/* Loads the Bios Parameter Block and the Extended Boot Record for the file system. */
 
 	uint8_t *buf = kmalloc(512);
+	if (buf == NULL) { return 1; }
 
 	if (fs_read_sectors(fs, 0, 1, buf)) {
-		return 1;
+		return ERR_DISK;
 	}
 
 	FAT16_BPB *bpb = (FAT16_BPB*)buf;
 
 	if ((bpb->signature != 0x28) && (bpb->signature != 0x29)) {
 		kfree(bpb);
-		return 2;
+		return ERR_INCOMPAT_PARAM;
 	}
 
 	fs->special = bpb;
-	return 0;
+	return GENERIC_SUCCESS;
 };
 
 
@@ -410,26 +412,26 @@ uint8_t fat16_read_file(struct file_system *fs, void *file_void, void *buf, size
 	offset = (size_t)((uint32_t)offset);
 	bytes = (size_t)((uint32_t)bytes);
 	if (fs == NULL) {
-		return 1;
+		return ERR_INVALID_PARAM;
 	}
 	if (f == NULL) {
-		return 1;
+		return ERR_INVALID_PARAM;
 	}
 	if (buf == NULL) {
-		return 1;
+		return ERR_INVALID_PARAM;
 	}
 	if (bytes == 0) {
-		return 0;	/* Nothing to do.*/
+		return GENERIC_SUCCESS;	/* Nothing to do.*/
 	}
 
 	FAT16_DIR_ENTRY *entry = f->entry;	/* File's directory entry. */
 
 	if (entry == NULL) {
-		return 1;
+		return ERR_INVALID_PARAM;
 	}
 
 	if ((offset + bytes) > entry->file_size) {
-		return 1;
+		return ERR_INVALID_PARAM;
 	}
 
 
@@ -437,7 +439,7 @@ uint8_t fat16_read_file(struct file_system *fs, void *file_void, void *buf, size
 
 
 	if (bpb == NULL) {
-		return 1;
+		return ERR_INVALID_PARAM;
 	}
 
 	uint64_t root_dir_sectors = ((bpb->num_dir_entries * 32) + (bpb->bytes_per_sector - 1)) / bpb->bytes_per_sector;
@@ -454,7 +456,7 @@ uint8_t fat16_read_file(struct file_system *fs, void *file_void, void *buf, size
 	while (offset > cluster_size) {
 		cluster = fat16_get_FAT_entry(fs, cluster);
 		if (cluster >= 0xFFF7) {
-			return 1;
+			return ERR_OUT_OF_BOUNDS;
 		}
 
 		offset -= cluster_size;
@@ -492,7 +494,7 @@ uint8_t fat16_read_file(struct file_system *fs, void *file_void, void *buf, size
 		/* Perform disk access. */
 		if (fs_read_sectors(fs, sector, sector_count, i_buf)) {
 			kfree(temp_buf);
-			return 1;
+			return ERR_DISK;
 		}
 
 
@@ -524,7 +526,7 @@ uint8_t fat16_read_file(struct file_system *fs, void *file_void, void *buf, size
 
 	kfree(temp_buf);
 
-	return 0;
+	return GENERIC_SUCCESS;
 };
 
 
@@ -536,13 +538,13 @@ uint8_t fat16_write_file(struct file_system *fs, void *file_void, void* buf, siz
 	offset = (size_t)((uint32_t)offset);
 	bytes = (size_t)((uint32_t)bytes);
 	/* Some checks first. */
-	if (fs == NULL)                             { return 1; }
-	if (f == NULL)                              { return 1; }
-	if (buf == NULL)                            { return 1; }
-	if (bytes == 0)                             { return 0; }
-	if (f->entry == NULL)                     { return 1; }
-	if ((offset + bytes) > f->entry->file_size) return 1;
-	if (fs->special == NULL)                    { return 1; }
+	if (fs == NULL)                             { return ERR_INVALID_PARAM; }
+	if (f == NULL)                              { return ERR_INVALID_PARAM; }
+	if (buf == NULL)                            { return ERR_INVALID_PARAM; }
+	if (bytes == 0)                             { return ERR_INVALID_PARAM; }
+	if (f->entry == NULL)                       { return ERR_INVALID_PARAM; }
+	if ((offset + bytes) > f->entry->file_size)   { return ERR_INVALID_PARAM; }
+	if (fs->special == NULL)                    { return ERR_INVALID_PARAM; }
 
 
 
@@ -565,7 +567,7 @@ uint8_t fat16_write_file(struct file_system *fs, void *file_void, void* buf, siz
 	while (offset > cluster_size) {
 		cluster = fat16_get_FAT_entry(fs, cluster);
 		if (cluster >= 0xFFF7) {
-			return 1;
+			return ERR_OUT_OF_BOUNDS;
 		}
 
 		offset -= cluster_size;
@@ -588,7 +590,7 @@ uint8_t fat16_write_file(struct file_system *fs, void *file_void, void* buf, siz
 		if (fs_read_sectors(fs, (cluster - 2) * bpb->sectors_per_cluster + first_data, 1, data)) {
 			kfree(temp_buf);
 			kfree(data);
-			return 1;
+			return ERR_DISK;
 		}
 
 		memcpy(temp_buf, data, offset_b);
@@ -624,7 +626,7 @@ uint8_t fat16_write_file(struct file_system *fs, void *file_void, void* buf, siz
 		if (fs_read_sectors(fs, (data_cluster - 2) * bpb->sectors_per_cluster + first_data + cluster_offset, 1, data)) {
 			kfree(temp_buf);
 			kfree(data);
-			return 1;
+			return ERR_DISK;
 		}
 
 
@@ -661,7 +663,7 @@ uint8_t fat16_write_file(struct file_system *fs, void *file_void, void* buf, siz
 		/* Perform disk access. */
 		if (fs_write_sectors(fs, sector, sector_count, i_buf)) {
 			kfree(temp_buf);
-			return 1;
+			return ERR_DISK;
 		}
 
 
@@ -684,5 +686,5 @@ uint8_t fat16_write_file(struct file_system *fs, void *file_void, void* buf, siz
 	/* If we reach here, everything should be done. */
 
 	kfree(temp_buf);
-	return 0;
+	return GENERIC_SUCCESS;
 };
