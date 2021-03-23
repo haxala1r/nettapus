@@ -9,11 +9,11 @@ AS := nasm
 # This is the emulator to run the image on. Currently we use QEMU.
 EMUL := qemu-system-x86_64 -cpu qemu64 
 
-KERNELFLAGS := -Og -std=c99 -Wall -Wextra -mcmodel=large -fno-pic -fno-stack-protector -mno-red-zone \
+KERNELFLAGS := -O2 -std=c99 -Wall -Wextra -mcmodel=large -fno-pic -fno-stack-protector -mno-red-zone \
 	-ffreestanding -nostdlib --sysroot="src/" -isystem="/libk/include/" 
 
 # Uncomment this while debugging. 
-KERNELFLAGS += -DDEBUG
+#KERNELFLAGS += -DDEBUG
 
 KERNELLINK := -ffreestanding -lgcc  -nostdinc  -nostdlib -no-pie -static -mcmodel=kernel \
 	-z max-page-size=0x1000
@@ -37,10 +37,10 @@ IMG := disk.img
 all: bios
 
 bios: kernel
-	@dd if=/dev/zero of=$(IMG) bs=1M count=128
-	@echo -e "2048 196608 0x80 *\n" | sfdisk $(IMG)
+	@dd if=/dev/zero of=$(IMG) bs=1M count=32
+	@echo -e "2048 63488 0x80 *\n" | sfdisk $(IMG)
 	# The only partition (EXT2)
-	@dd if=/dev/zero of=temp.img bs=512 count=196608
+	@dd if=/dev/zero of=temp.img bs=512 count=63488
 	@mkfs.ext2 temp.img
 	@./ext2.sh
 	@dd if=temp.img of=$(IMG) bs=512 seek=2048 conv=notrunc
