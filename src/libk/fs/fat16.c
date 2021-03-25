@@ -127,7 +127,7 @@ char **fat16_parse_path(char *path, uint32_t *depth) {
 	 */
 
 	i = path;
-	if (*i == '/') {
+	while ((*i == '/') && (*i != '\0')) {
 		i++;	/* Don't count the first slash. */
 	}
 
@@ -162,7 +162,7 @@ char **fat16_parse_path(char *path, uint32_t *depth) {
 	 * 	comes between i and j is another directory. So we allocate space for a string,
 	 * 	and copy everything betweeen i and j there. Increment j, and set i to j. This way,
 	 * 	we get a clear array of things between the slashes, a.k.a. directories.
-	 * */
+	 */
 
 	while (1) {
 		if (*j == '\0') {

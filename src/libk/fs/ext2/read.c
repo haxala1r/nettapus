@@ -6,7 +6,7 @@
 
 
 
-
+/* TODO: Refactor this function so that it looks less like a mess. */
 uint8_t ext2_read_file(struct file_system *fs, void *file_void, void *buf,
                      size_t offset, size_t bytes) {
 	if (fs == NULL)              { return ERR_INVALID_PARAM;  }
@@ -20,7 +20,7 @@ uint8_t ext2_read_file(struct file_system *fs, void *file_void, void *buf,
 	struct ext2_inode *f = file_void;
 	uint64_t f_size = ((uint64_t)f->size_high << 32) | ((uint64_t)f->size_low);
 
-	if (offset > f_size) {
+	if (offset >= f_size) {
 		return ERR_OUT_OF_BOUNDS;
 	}
 	if ((offset + bytes) > f_size) {
@@ -29,11 +29,11 @@ uint8_t ext2_read_file(struct file_system *fs, void *file_void, void *buf,
 
 	/* 1024 is 2^10, sb->log2_block_size holds the number to shift that left by.*/
 	size_t block_size = (1024 << (sb->log2_block_size));
-	size_t block = offset / block_size;
-	size_t block_addr;
-	size_t lba;
-	size_t sector_count;
-	size_t to_read;
+	size_t block = offset / block_size;	/* in the file. */
+	size_t block_addr;	 /* the absolute block address of "block" */
+	size_t lba;	         /* To read from */
+	size_t sector_count; /* How many sectors need to be read. */
+	size_t to_read;      /* How many bytes need to be read. */
 
 	/* Get a buffer ready. We will read a whole block at most at a time. */
 	void *block_buf = kmalloc(block_size);

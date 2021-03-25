@@ -180,6 +180,9 @@ struct file {
 
 
 
+char **fs_parse_path(char *path);
+/* Frees the arrays allocated with fs_parse_path. */
+void fs_free_path(char **arr);
 
 uint8_t fs_read_sectors(struct file_system *fs, uint64_t lba,
                         uint32_t sec_count, void *buf);

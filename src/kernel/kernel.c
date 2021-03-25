@@ -149,7 +149,7 @@ void _start(struct stivale2_struct *hdr) {
 	 * contains the fonts used by the driver itself. This is the reason we have to initialise
 	 * the FS drivers *before* TTY.
 	 */
-	if (tty_init("lat9-08.psf")) {
+	if (tty_init("/fonts/lat9-08.psf")) {
 		kpanic();
 	}
 
