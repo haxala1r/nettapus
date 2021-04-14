@@ -16,6 +16,20 @@ size_t ext2_inode_block(struct ext2_inode *f, size_t block_num) {
 	return -1;
 };
 
+uint8_t ext2_inode_add_block(struct file_system *fs, struct ext2_inode *f, size_t block_addr) {
+	if (fs == NULL)          { return ERR_INVALID_PARAM; }
+	if (fs->special == NULL) { return ERR_INVALID_PARAM; }
+
+	for (size_t i = 0; i < 12; i++) {
+		if (f->direct_block[i] == 0) {
+			f->direct_block[i] = block_addr;
+			return GENERIC_SUCCESS;
+		}
+	}
+
+	/* TODO: Consult the indirect blocks here.*/
+	return ERR_NO_RESULT;
+};
 
 
 uint8_t ext2_load_inode(struct file_system *fs, size_t inode_num, void *buf) {
@@ -59,5 +73,44 @@ uint8_t ext2_load_inode(struct file_system *fs, size_t inode_num, void *buf) {
 	return GENERIC_SUCCESS;
 };
 
+/* TODO: take care of syncing things with the disk. */
+
+uint8_t ext2_write_inode(struct file_system *fs, struct ext2_inode *n, size_t n_addr) {
+	if (fs == NULL) { return ERR_INVALID_PARAM; }
+	if (fs->special == NULL) { return ERR_INVALID_PARAM; }
+
+	struct ext2_fs *e2fs = fs->special;
+
+	/* Inode addresses start from 1, so we subtract 1.*/
+	size_t index = (n_addr - 1) % e2fs->sb->inodes_in_group;
+	size_t group = (n_addr - 1) / e2fs->sb->inodes_in_group;
+
+	size_t lba;   /* Of the sector to read from. */
+	size_t offset; /* Inside the inode table. */
+
+	struct ext2_group_des gd = ext2_get_group_des(fs, group);
+
+	void *disk_buf = kmalloc(512);
+
+	//TODO: Add code to actually update the inode from this.
+
+	offset = index * e2fs->sb->inode_struct_size;
+	lba = gd.inode_table_addr * e2fs->block_size / 512 + offset / 512;
+
+	if (fs_read_sectors(fs, lba, 1, disk_buf)) {
+		kfree(disk_buf);
+		return ERR_DISK;
+	}
+
+	memcpy(disk_buf + offset % 512, n, sizeof(*n));
+
+	if (fs_write_sectors(fs, lba, 1, disk_buf)) {
+		kfree(disk_buf);
+		return ERR_DISK;
+	}
+
+	kfree(disk_buf);
+	return GENERIC_SUCCESS;
+};
 
 

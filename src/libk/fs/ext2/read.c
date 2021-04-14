@@ -17,7 +17,7 @@ uint8_t ext2_read_file(struct file_system *fs, void *file_void, void *buf,
 
 	struct ext2_fs *fs_ext2 = fs->special;
 	struct ext2_superblock *sb = fs_ext2->sb;
-	struct ext2_inode *f = file_void;
+	struct ext2_inode *f = ((struct ext2_file*)file_void)->node;
 	uint64_t f_size = ((uint64_t)f->size_high << 32) | ((uint64_t)f->size_low);
 
 	if (offset >= f_size) {
@@ -35,7 +35,7 @@ uint8_t ext2_read_file(struct file_system *fs, void *file_void, void *buf,
 	size_t sector_count; /* How many sectors need to be read. */
 	size_t to_read;      /* How many bytes need to be read. */
 
-	/* Get a buffer ready. We will read a whole block at most at a time. */
+	/* Get a buffer ready. We will read a whole block *at most* at a time. */
 	void *block_buf = kmalloc(block_size);
 	if (block_buf == NULL) { return ERR_OUT_OF_MEM; }
 
@@ -54,7 +54,7 @@ uint8_t ext2_read_file(struct file_system *fs, void *file_void, void *buf,
 		 * at most, at a time.
 		 */
 		to_read = (bytes > (block_size - offset % block_size)) ? (block_size - offset % block_size) : bytes;
-		sector_count = to_read / 512 + !!(to_read % 512) + !!(offset % 512);
+		sector_count = to_read / 512 + !!((to_read) % 512) + !!(offset % 512);
 
 		lba += block_addr * block_size / 512;
 

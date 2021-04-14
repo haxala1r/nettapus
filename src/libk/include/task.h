@@ -92,7 +92,7 @@ void scheduler_irq0();
 void yield();
 
 void block_task();
-void unblock_task();
+void unblock_task(struct task *t);
 
 
 /* Some stuff to prevent being preempted in the middle of a critical section. */

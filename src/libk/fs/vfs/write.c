@@ -20,7 +20,9 @@ int64_t write_file(struct file *f, void *buf, size_t bytes) {
 	uint8_t status = f->node->fs->driver->write(f->node->fs, f->node->special, \
 	                                            buf, f->position, bytes);
 
+	/* Write should be complete, check for error, update stuff, then return. */
 	if (status) {
+		/* Error. */
 		release_semaphore(f->node->mutex);
 		return -status;
 	}

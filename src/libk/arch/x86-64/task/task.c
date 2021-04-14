@@ -207,7 +207,7 @@ void scheduler_irq0() {
 
 	/* Decrement the current task's counter. */
 	if (current_task->ticks_remaining != 0) {
-		lock_scheduler();
+		lock_scheduler();	/* For protection in SMP. */
 		current_task->ticks_remaining--;
 		unlock_scheduler();
 	}

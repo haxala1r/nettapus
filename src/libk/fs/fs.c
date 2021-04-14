@@ -26,7 +26,7 @@ const struct fs_driver ext2_driver = {
 	.open       = ext2_open_file,
 	.close      = NULL,
 	.read       = ext2_read_file,
-	.write      = NULL,
+	.write      = ext2_write_file,
 	.get_size   = ext2_get_size,
 
 	.type       = FS_EXT2

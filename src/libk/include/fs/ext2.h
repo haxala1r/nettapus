@@ -126,6 +126,8 @@ struct ext2_group_des {
 	char _pad[14];
 } __attribute__((packed));
 
+
+
 struct ext2_dir_entry {
 	uint32_t inode;
 	uint16_t size;
@@ -136,14 +138,25 @@ struct ext2_dir_entry {
 
 struct ext2_fs {
 	struct ext2_superblock *sb;
-	size_t group_des_table_block;
 
+	/* These are here so that we don't compute them everytime a file is accessed.
+	 * They are easy to compute, but you don't really want to do that a thousand
+	 * times a second.
+	 */
+	size_t group_des_table_block;
+	size_t block_size;
 };
 
+struct ext2_file {
+	size_t inode_addr;		/* This is here so that the node can be updated. */
+	struct ext2_inode *node;
+};
 
 
 uint8_t ext2_init_fs(struct file_system *fs);
 uint8_t ext2_read_file(struct file_system *fs, void *file_void, void *buf,
+                     size_t offset, size_t bytes);
+uint8_t ext2_write_file(struct file_system *fs, void *file_void, void *buf,
                      size_t offset, size_t bytes);
 void *ext2_open_file(struct file_system *fs, char *path);
 
@@ -157,6 +170,12 @@ uint8_t ext2_load_inode(struct file_system *fs, size_t inode_num, void *buf);
 size_t ext2_inode_block(struct ext2_inode *f, size_t block_num);
 
 uint8_t ext2_load_block(struct file_system *fs, size_t block_addr, void *buf);
+uint8_t ext2_write_block(struct file_system *fs, size_t block_addr, void *buf,
+                        size_t offset, size_t bytes);
 
+struct ext2_group_des ext2_get_group_des(struct file_system *fs, size_t group);
+uint8_t ext2_write_inode(struct file_system *fs, struct ext2_inode *n, size_t n_addr);
 
+uint8_t ext2_alloc_blocks(struct file_system *fs, struct ext2_file *f, size_t blocks);
+uint8_t ext2_inode_add_block(struct file_system *fs, struct ext2_inode *f, size_t block_addr);
 #endif

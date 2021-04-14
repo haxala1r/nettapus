@@ -85,8 +85,10 @@ void *ext2_open_file(struct file_system *fs, char *path) {
 	}
 
 	/* n should now hold the directory entry of the file. */
-	struct ext2_inode *ret = kmalloc(sizeof(*ret));
-	ext2_load_inode(fs, inode_num, ret);
+	struct ext2_file *ret = kmalloc(sizeof(*ret));
+	ret->inode_addr = inode_num;
+	ret->node = kmalloc(sizeof(struct ext2_inode));
+	ext2_load_inode(fs, inode_num, ret->node);
 
 	fs_free_path(path_arr);
 	return ret;

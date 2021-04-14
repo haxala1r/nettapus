@@ -30,6 +30,7 @@ uint8_t ext2_init_fs(struct file_system *fs) {
 	kfree(sb);
 
 	fs_ext2->group_des_table_block = fs_ext2->sb->log2_block_size ? 1 : 2;
+	fs_ext2->block_size = (1024 << fs_ext2->sb->log2_block_size);
 	fs->special = fs_ext2;
 
 	return GENERIC_SUCCESS;

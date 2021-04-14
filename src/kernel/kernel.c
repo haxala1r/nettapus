@@ -57,7 +57,7 @@ struct stivale2_header stivale_hdr = {
 
 
 
-void* get_stivale_header(struct stivale2_struct* s, uint64_t id) {
+void *get_stivale_header(struct stivale2_struct *s, uint64_t id) {
 	struct stivale2_tag* i = (void*)s->tags;
 	while (i) {
 
@@ -81,10 +81,8 @@ void _start(struct stivale2_struct *hdr) {
 
 	/*
 	 * It is important that we extract all the information from the bootloader
-	 * we need before loading our own page tables. This is because when we
-	 * load our own page tables, the stivale2 struct will be an invalid address.
+	 * we need before loading our own page tables.
 	 */
-
 
 	struct stivale2_struct_tag_framebuffer* fb_hdr_tag;
 	fb_hdr_tag = get_stivale_header(hdr, STIVALE2_STRUCT_TAG_FRAMEBUFFER_ID);

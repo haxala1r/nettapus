@@ -64,7 +64,7 @@ libk.a: $(LIBKOBJ)
 	@$(AS) -f elf64 $< -o $@
 
 qemu: 
-	@$(EMUL) -drive file=$(IMG),format=raw  
+	@$(EMUL) -drive file=$(IMG),format=raw
 
 
 clean:
