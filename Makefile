@@ -40,10 +40,10 @@ bios: kernel
 	@dd if=/dev/zero of=$(IMG) bs=1M count=32
 	@echo -e "2048 63488 0x80 *\n" | sfdisk $(IMG)
 	# The only partition (EXT2)
-	@dd if=/dev/zero of=temp.img bs=512 count=63488
-	@mkfs.ext2 temp.img
+	@dd if=/dev/zero of=ext2.img bs=512 count=63488
+	@mkfs.ext2 ext2.img
 	@./ext2.sh
-	@dd if=temp.img of=$(IMG) bs=512 seek=2048 conv=notrunc
+	@dd if=ext2.img of=$(IMG) bs=512 seek=2048 conv=notrunc
 	@sync
 	@limine-install $(IMG)					# Install limine.
 	@$(RM) temp.img

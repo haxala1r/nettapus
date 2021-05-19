@@ -1,81 +1,65 @@
+#include <err.h>
+#include <disk/disk.h>
 #include <fs/fs.h>
 #include <fs/ext2.h>
-
-#include <err.h>
+#include <string.h>
 #include <mem.h>
 
 
+int64_t ext2_read_file(struct file_system *fs, size_t inode, void *dest_buf, size_t off, size_t bytes) {
+	if (fs == NULL)       { return -ERR_INVALID_PARAM; }
+	if (inode <= 2)       { return -ERR_INVALID_PARAM; }
+	if (dest_buf == NULL) { return -ERR_INVALID_PARAM; }
 
-/* TODO: Refactor this function so that it looks less like a mess. */
-uint8_t ext2_read_file(struct file_system *fs, void *file_void, void *buf,
-                     size_t offset, size_t bytes) {
-	if (fs == NULL)              { return ERR_INVALID_PARAM;  }
-	if (fs->special == NULL)     { return ERR_INVALID_PARAM;  }
-	if (fs->fs_type != FS_EXT2)  { return ERR_INCOMPAT_PARAM; }
-	if (file_void == NULL)        { return ERR_INVALID_PARAM;  }
-	if (buf == NULL)             { return ERR_INVALID_PARAM;  }
+	struct ext2_fs *e2fs = fs->special;
 
-	struct ext2_fs *fs_ext2 = fs->special;
-	struct ext2_superblock *sb = fs_ext2->sb;
-	struct ext2_inode *f = ((struct ext2_file*)file_void)->node;
-	uint64_t f_size = ((uint64_t)f->size_high << 32) | ((uint64_t)f->size_low);
-
-	if (offset >= f_size) {
-		return ERR_OUT_OF_BOUNDS;
-	}
-	if ((offset + bytes) > f_size) {
-		bytes = f_size - offset;
+	struct ext2_inode node;
+	if (ext2_load_inode(fs, &node, inode)) {
+		return -ERR_DISK;
 	}
 
-	/* 1024 is 2^10, sb->log2_block_size holds the number to shift that left by.*/
-	size_t block_size = (1024 << (sb->log2_block_size));
-	size_t block = offset / block_size;	/* in the file. */
-	size_t block_addr;	 /* the absolute block address of "block" */
-	size_t lba;	         /* To read from */
-	size_t sector_count; /* How many sectors need to be read. */
-	size_t to_read;      /* How many bytes need to be read. */
+	uint64_t file_size = ((uint64_t)node.size_high << 32) | ((uint64_t)node.size_low);
+	if ((off + bytes) > file_size) {
+		return -ERR_INVALID_PARAM;
+	}
 
-	/* Get a buffer ready. We will read a whole block *at most* at a time. */
-	void *block_buf = kmalloc(block_size);
-	if (block_buf == NULL) { return ERR_OUT_OF_MEM; }
+	/* Get the buffer ready.*/
+	void *data_buf = kmalloc(e2fs->block_size);
+	if (data_buf == NULL) { return -ERR_OUT_OF_MEM; }
 
-	/* Read the contents of the block, skip to the next block if necessary. */
+	size_t block = off / e2fs->block_size;
+	off = off % e2fs->block_size;
+	size_t block_addr;
+	size_t bytes_read = 0;
 
 	while (bytes) {
-		/* The block to read from. */
-		block_addr = ext2_inode_block(f, block);
-
-		/* Determine which sector we need to start reading from. */
-		lba = (offset % block_size) / 512;
-
-		/* Determine the amount of sectors to read. If offset+bytes steps over a
-		 * block boundary, only read the current block for this iteration.
-		 * This specific line ensures that we only read until the end of the block
-		 * at most, at a time.
-		 */
-		to_read = (bytes > (block_size - offset % block_size)) ? (block_size - offset % block_size) : bytes;
-		sector_count = to_read / 512 + !!((to_read) % 512) + !!(offset % 512);
-
-		lba += block_addr * block_size / 512;
-
-		if (fs_read_sectors(fs, lba, sector_count, block_buf)) {
-			kfree(block_buf);
-			return ERR_DISK;
+		/* Get the block address of the next block;*/
+		block_addr = ext2_block_in_inode(&node, block);
+		if (block_addr == 0) {
+			break;
 		}
 
-		memcpy(buf, block_buf + (offset % 512), to_read);
+		/* Load the block into memory. */
+		if (ext2_load_blocks(fs, data_buf, block_addr, 1)) {
+			kfree(data_buf);
+			return -ERR_DISK;
+		}
 
-		/* offset has been taken care of. */
-		offset = 0;
+		/* Copy the data from the block. */
+		size_t to_copy = e2fs->block_size - off;
+		to_copy = (to_copy > bytes) ? bytes : to_copy;
+		memcpy(dest_buf, data_buf + off, to_copy);
 
-		buf += to_read;
-		bytes -= to_read;
+		/* Continue. */
+		bytes -= to_copy;
+		dest_buf += to_copy;
+		bytes_read += to_copy;
+		off = 0;
 		block++;
 	}
 
-	/* We should be done. */
-	kfree(block_buf);
-
-	return GENERIC_SUCCESS;
+	kfree(data_buf);
+	return bytes_read;
 };
+
 

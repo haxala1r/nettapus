@@ -1,132 +1,88 @@
-
 #include <fs/fs.h>
-#include <mem.h>
+#include <err.h>
 #include <task.h>
+#include <string.h>
 
-/* Now we need to include the headers for the FS drivers. */
-#include <fs/ustar.h>
-#include <fs/fat16.h>
+int64_t vfs_read_file(struct file_descriptor *fdes, void *buf, int64_t amount) {
+	if (fdes == NULL)       { return -ERR_INVALID_PARAM; }
+	if (buf == NULL)        { return -ERR_INVALID_PARAM; }
+	if (fdes->node == NULL) { return -ERR_INVALID_PARAM; }
 
+	struct file_vnode *node = fdes->node;
+	acquire_semaphore(node->mutex);
 
-int64_t read_file(struct file *f, void *buf, size_t bytes) {
-	/* This is the generic read function for files. It loads the data from disk,
-	 * and copies it to buf.
-	 */
-
-	if (f == NULL)                    { return -1; }
-	if (f->node == NULL)              { return -1; }
-	if (f->node->fs == NULL)          { return -1; }
-	if (f->node->fs->driver == NULL)  { return -1; }
-	if (f->node->mutex == NULL)       { return -1; }
-	if (f->mode != 0)                 { return -1; }
-
-	acquire_semaphore(f->node->mutex);
-
-	/* Determine the amount of bytes that can be read */
-	size_t to_read = bytes;
-	if ((f->position + to_read) > f->node->last) {
-		to_read = f->node->last - f->position;
+	/* Determine the exact amount we can read. */
+	int64_t to_read = amount;
+	if ((to_read + fdes->pos) > node->size) {
+		to_read = node->size - fdes->pos;
 	}
 
-	uint8_t status = f->node->fs->driver->read(f->node->fs, f->node->special, buf, f->position, to_read);
+	/* Request the filesystem driver to read from disk. */
+	int64_t stat = node->fs->driver->read(node->fs, node->inode_num, buf, fdes->pos, to_read);
 
-	if (status) {
-		release_semaphore(f->node->mutex);
-		return -status;
+	release_semaphore(node->mutex);
+	if (stat > 0) {
+		fdes->pos += stat;
 	}
-
-	/* Return the amount of bytes that were actually read.*/
-	f->position += to_read;
-
-	release_semaphore(f->node->mutex);
-	return to_read;
+	return stat;
 };
 
 
-int64_t read_pipe(struct file *f, void *buf, size_t bytes) {
-	/* This is the generic read function used for pipes. If the request
-	 * size exceeds the pipe's size, or the requested amount of data has
-	 * not been written to the pipe, the process will be blocked.
-	 */
 
-	/* Some checks to see if the request is valid. */
-	if (f == NULL)                      { return -1; }
-	if (f->node == NULL)                { return -1; }
-	if (f->node->special == NULL)       { return -1; }
-	if (f->node->mutex == NULL)         { return -1; }
-	if ((f->node->type != FILE_PIPE_NAMED) && (f->node->type != FILE_PIPE_UNNAMED)) {
-		return -1;
-	}
-	if (buf == NULL)                    { return -1; }
-	if (bytes <= 0)                     { return  0; }
-	/* TODO: Handle broken pipes better. */
-	if (f->node->writer_count == 0)     { return -1; }
+int64_t vfs_read_pipe(struct file_descriptor *fdes, void *buf, int64_t amount) {
+	if (fdes == NULL)       { return -ERR_INVALID_PARAM; }
+	if (buf == NULL)        { return -ERR_INVALID_PARAM; }
+	if (fdes->node == NULL) { return -ERR_INVALID_PARAM; }
 
-	acquire_semaphore(f->node->mutex);
+	struct file_vnode *node = fdes->node;
+	acquire_semaphore(node->mutex);
+	int64_t ret = 0;
+	while (amount > 0) {
+		/* For pipes, the size attribute indicates the amount of data stored. */
+		int64_t to_read = ((int64_t)node->size > amount) ? amount : (int64_t)node->size;
 
-	/* The upcoming loop modifies "bytes". */
-	size_t to_read = bytes;
-
-	/* Block if there isn't enough data to read. */
-	while (bytes > f->node->last) {
-		if (f->flags & FILE_FLAG_NONBLOCK) {
-			release_semaphore(f->node->mutex);
-			return 0;
-		}
-
-		/* This waits until data has been written to the pipe. */
-		if (f->node->last == 0) {
-
-			/* Add ourselves to the queue without blocking yet. */
+		if (to_read == 0) {
+			/* There isn't enough data on the pipe yet. */
 			lock_task_switches();
-			wait_queue(f->node->read_queue);
 
-			release_semaphore(f->node->mutex);
+			wait_queue(node->read_queue);
+			release_semaphore(node->mutex);
+			signal_queue(node->write_queue);
 
-			/* Now we can block as normal. */
 			unlock_task_switches();
-
-			/* We got unblocked, and there's data to read. */
-			acquire_semaphore(f->node->mutex);
+			acquire_semaphore(node->mutex);
+			continue;
 		}
 
-		if (bytes > f->node->last) {
-			memcpy(buf, f->node->special, f->node->last);
-			buf += f->node->last;
-			bytes -= f->node->last;
-			f->node->last = 0;
-		}
+		/* Copy the data from the pipe to the buffer. */
+		memcpy(buf, node->pipe_mem, to_read);
+
+		/* Remove the data read from the pipe. */
+		memcpy(node->pipe_mem, node->pipe_mem + to_read, DEFAULT_PIPE_SIZE - to_read);
+
+		amount -= to_read;
+		node->size -= to_read;
+		buf += to_read;
+		ret += to_read;
 	}
 
-	/* Copy the data to caller's buffer. */
-	memcpy(buf, f->node->special, bytes);
-
-	/* Remove the data that was read from the pipe.*/
-	memcpy(f->node->special, f->node->special + bytes, DEFAULT_PIPE_SIZE - bytes);
-
-	f->node->last -= bytes;
-
-	release_semaphore(f->node->mutex);
-	signal_queue(f->node->write_queue);
-	return to_read;
+	signal_queue(node->write_queue);
+	release_semaphore(node->mutex);
+	return ret;
 };
 
 
-int64_t read(struct task *t, int32_t file_des, void* buf, size_t bytes) {
-	/* This function simply finds the node associated with the given
-	 * file descriptor and calls its read function.
-	 */
 
-	if (t == NULL) 			{ return -1; }
+int64_t kread(int32_t fd, void *buf, int64_t amount) {
+	if (buf == NULL) { return -ERR_INVALID_PARAM; }
+	if (fd < 0)      { return -ERR_INVALID_PARAM; }
 
-	struct file *f = vfs_fd_lookup(t, file_des);
-	if (f == NULL) 				{ return -1; }
-	if (f->node == NULL)		{ return -1; }
-	if (f->mode != FD_READ)		{ return -1;}
+	struct file_descriptor *fdes = vfs_find_fd(get_current_task(), fd);
+	if (fdes == NULL) { return -ERR_INVALID_PARAM; }
+	if (!fdes->file)   { return -ERR_INVALID_PARAM; }
 
-	return f->node->read(f, buf, bytes);
+	struct file_vnode *fnode = fdes->node;
+
+	return fnode->read(fdes, buf, amount);
 };
 
-int64_t kread(int32_t file_des, void *buf, size_t bytes) {
-	return read(get_current_task(), file_des, buf, bytes);
-};

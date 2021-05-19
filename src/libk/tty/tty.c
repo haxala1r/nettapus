@@ -170,10 +170,9 @@ uint8_t tty_init(char *font_file) {
 	}
 
 
-	int32_t fd = kopen(font_file, 0);
+	int32_t fd = kopen(font_file, 0);	/* ITS THE KOPEN() CALL. */
 	if (fd == -1) { return 1; };
 	font_hdr = kmalloc(sizeof(struct PS_font));
-
 
 	/* Read font file header, and store it. */
 	if (kread(fd, font_hdr, 32) != 32) {

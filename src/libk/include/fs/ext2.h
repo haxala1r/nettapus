@@ -109,7 +109,7 @@ struct ext2_inode {
 
 	uint32_t frag_block_addr;
 
-	uint32_t os_specific2;
+	char os_specific2[12];
 } __attribute__((packed));
 
 
@@ -126,8 +126,6 @@ struct ext2_group_des {
 	char _pad[14];
 } __attribute__((packed));
 
-
-
 struct ext2_dir_entry {
 	uint32_t inode;
 	uint16_t size;
@@ -136,15 +134,16 @@ struct ext2_dir_entry {
 	char nm;
 } __attribute__((packed));
 
+
+
+
 struct ext2_fs {
 	struct ext2_superblock *sb;
 
-	/* These are here so that we don't compute them everytime a file is accessed.
-	 * They are easy to compute, but you don't really want to do that a thousand
-	 * times a second.
-	 */
+	/* These are here so that we don't compute them everytime a file is accessed. */
 	size_t group_des_table_block;
 	size_t block_size;
+	size_t group_count;
 };
 
 struct ext2_file {
@@ -152,30 +151,35 @@ struct ext2_file {
 	struct ext2_inode *node;
 };
 
+struct file_system;
+struct drive;
+
+size_t ext2_load_blocks(struct file_system *fs, void *buf, size_t block_addr, size_t count);
+size_t ext2_write_blocks(struct file_system *fs, void *buf, size_t block_addr, size_t count);
+size_t ext2_load_group_des(struct file_system *fs, struct ext2_group_des *dest, size_t group);
+size_t ext2_block_in_inode(struct ext2_inode *node, size_t n);
+size_t ext2_alloc_blocks(struct file_system *fs, size_t count, uint32_t *ret);
+
+size_t ext2_load_inode(struct file_system *fs, struct ext2_inode *dest, size_t inode_num);
+size_t ext2_write_inode(struct file_system *fs, struct ext2_inode *dest, size_t inode_num);
+size_t ext2_alloc_inode(struct file_system *fs);
+
+/* Get attributes of inodes. */
+int64_t ext2_get_size(struct file_system *fs, size_t inode_num);
+int64_t ext2_get_links(struct file_system *fs, size_t inode_num);
+uint16_t ext2_get_type_perm(struct file_system *fs, size_t inode_num);
 
 uint8_t ext2_init_fs(struct file_system *fs);
-uint8_t ext2_read_file(struct file_system *fs, void *file_void, void *buf,
-                     size_t offset, size_t bytes);
-uint8_t ext2_write_file(struct file_system *fs, void *file_void, void *buf,
-                     size_t offset, size_t bytes);
-void *ext2_open_file(struct file_system *fs, char *path);
+uint8_t ext2_check_drive(struct drive *d);
 
-size_t ext2_get_size(void *);
+size_t ext2_open_at(struct file_system *fs, size_t folder_inode, char *full_path);
+size_t ext2_open(struct file_system *fs, char *full_path);
+int64_t ext2_read_file(struct file_system *fs, size_t inode, void *dest_buf, size_t off, size_t bytes);
+int64_t ext2_write_file(struct file_system *fs, size_t inode, void *dest_buf, size_t off, size_t bytes);
 
+size_t ext2_mknod(struct file_system *fs, size_t parent_inode, char *file_name, uint16_t type_perm, size_t uid, size_t gid);
 
+struct file_tnode *ext2_list_files(struct file_system *fs, size_t inode, size_t *count);
+struct folder_tnode *ext2_list_folders(struct file_system *fs, size_t inode, size_t *count);
 
-
-
-uint8_t ext2_load_inode(struct file_system *fs, size_t inode_num, void *buf);
-size_t ext2_inode_block(struct ext2_inode *f, size_t block_num);
-
-uint8_t ext2_load_block(struct file_system *fs, size_t block_addr, void *buf);
-uint8_t ext2_write_block(struct file_system *fs, size_t block_addr, void *buf,
-                        size_t offset, size_t bytes);
-
-struct ext2_group_des ext2_get_group_des(struct file_system *fs, size_t group);
-uint8_t ext2_write_inode(struct file_system *fs, struct ext2_inode *n, size_t n_addr);
-
-uint8_t ext2_alloc_blocks(struct file_system *fs, struct ext2_file *f, size_t blocks);
-uint8_t ext2_inode_add_block(struct file_system *fs, struct ext2_inode *f, size_t block_addr);
 #endif

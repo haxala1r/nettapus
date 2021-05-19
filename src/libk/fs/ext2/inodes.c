@@ -1,116 +1,181 @@
+#include <err.h>
+#include <mem.h>
+#include <string.h>
+#include <disk/disk.h>
 #include <fs/fs.h>
 #include <fs/ext2.h>
 
-#include <err.h>
-#include <mem.h>
 
+size_t ext2_block_in_inode(struct ext2_inode *node, size_t n) {
+	/* Returns the nth data block of the inode. */
+	if (node == NULL) { return 0; }
 
-size_t ext2_inode_block(struct ext2_inode *f, size_t block_num) {
-	/* Gives the block address of the block_num'th data block of an inode. */
-	if (block_num < 12) {
-		return f->direct_block[block_num];
-	} else {
-		/* TODO */
+	if (n < 12) {
+		return node->direct_block[n];
 	}
-
-	return -1;
+	/* TODO: handle indirect blocks. */
+	return 0;
 };
 
-uint8_t ext2_inode_add_block(struct file_system *fs, struct ext2_inode *f, size_t block_addr) {
+
+size_t ext2_load_inode(struct file_system *fs, struct ext2_inode *dest, size_t inode_num) {
 	if (fs == NULL)          { return ERR_INVALID_PARAM; }
 	if (fs->special == NULL) { return ERR_INVALID_PARAM; }
 
-	for (size_t i = 0; i < 12; i++) {
-		if (f->direct_block[i] == 0) {
-			f->direct_block[i] = block_addr;
-			return GENERIC_SUCCESS;
-		}
-	}
-
-	/* TODO: Consult the indirect blocks here.*/
-	return ERR_NO_RESULT;
-};
-
-
-uint8_t ext2_load_inode(struct file_system *fs, size_t inode_num, void *buf) {
-	if (inode_num == 0) { return ERR_INVALID_PARAM; }
-	if (buf == NULL)    { return ERR_INVALID_PARAM; }
-	if (fs == NULL)     { return ERR_INVALID_PARAM; }
-
 	struct ext2_fs *e2fs = fs->special;
-	size_t block_size = (1024 << e2fs->sb->log2_block_size);
 
-	size_t block_group = (inode_num - 1) / e2fs->sb->inodes_in_group;
+	size_t group = (inode_num - 1) / e2fs->sb->inodes_in_group;
 	size_t index = (inode_num - 1) % e2fs->sb->inodes_in_group;
+	size_t containing_block = index * sizeof(*dest) / e2fs->block_size;
 
-	/* Offset and lba of the block group descriptor table. */
-	size_t offset = (e2fs->group_des_table_block * block_size + block_group * sizeof(struct ext2_group_des));
-	size_t lba = offset / 512;
+	/* Load the group descriptor table entry. */
+	struct ext2_group_des *gd = kmalloc(sizeof(*gd));
+	if (ext2_load_group_des(fs, gd, group)) {
+		kfree(gd);
+		return ERR_DISK;
+	};
 
-	/* We need to read from the block group descriptor table. */
-	void *disk_buf = kmalloc(512);
+	/* Get the block address of the inode table, then load and search the inode table. */
+	struct ext2_inode *buf = kmalloc(e2fs->block_size);
+	size_t block = gd->inode_table_addr + containing_block;
+	kfree(gd);
 
-	if (fs_read_sectors(fs, lba, 1, disk_buf)) {
-		kfree(disk_buf);
+	if (ext2_load_blocks(fs, buf, block, 1)) {
+		kfree(buf);
 		return ERR_DISK;
 	}
 
-	/* Now figure out the sector in which the inode resides.*/
-	struct ext2_group_des *gd = disk_buf + (offset % 512);
-	lba = gd->inode_table_addr * block_size / 512 + (index * e2fs->sb->inode_struct_size) / 512;
-
-	/* Perform the read. */
-	if (fs_read_sectors(fs, lba, 1, disk_buf)) {
-		kfree(disk_buf);
-		return ERR_DISK;
-	}
-
-	/* Copy the inode, then return. */
-	struct ext2_inode *node = disk_buf + ((index * e2fs->sb->inode_struct_size) % 512);
-	memcpy(buf, node, sizeof(struct ext2_inode));
-	kfree(disk_buf);
+	memcpy(dest, buf + (index % (e2fs->block_size / sizeof(*dest))), sizeof(*dest));
+	kfree(buf);
 
 	return GENERIC_SUCCESS;
 };
 
-/* TODO: take care of syncing things with the disk. */
-
-uint8_t ext2_write_inode(struct file_system *fs, struct ext2_inode *n, size_t n_addr) {
-	if (fs == NULL) { return ERR_INVALID_PARAM; }
+size_t ext2_write_inode(struct file_system *fs, struct ext2_inode *inode, size_t inode_num) {
+	if (fs == NULL)          { return ERR_INVALID_PARAM; }
+	if (inode == NULL)       { return ERR_INVALID_PARAM; }
 	if (fs->special == NULL) { return ERR_INVALID_PARAM; }
 
 	struct ext2_fs *e2fs = fs->special;
 
-	/* Inode addresses start from 1, so we subtract 1.*/
-	size_t index = (n_addr - 1) % e2fs->sb->inodes_in_group;
-	size_t group = (n_addr - 1) / e2fs->sb->inodes_in_group;
+	size_t group = (inode_num - 1) / e2fs->sb->inodes_in_group;
+	size_t index = (inode_num - 1) % e2fs->sb->inodes_in_group;
+	size_t block = (index * sizeof(*inode)) / e2fs->block_size;
+	size_t offset = (index * sizeof(*inode)) % e2fs->block_size;
 
-	size_t lba;   /* Of the sector to read from. */
-	size_t offset; /* Inside the inode table. */
+	/* Load the group descriptor and find the inode table. */
+	struct ext2_group_des gdes;
 
-	struct ext2_group_des gd = ext2_get_group_des(fs, group);
-
-	void *disk_buf = kmalloc(512);
-
-	//TODO: Add code to actually update the inode from this.
-
-	offset = index * e2fs->sb->inode_struct_size;
-	lba = gd.inode_table_addr * e2fs->block_size / 512 + offset / 512;
-
-	if (fs_read_sectors(fs, lba, 1, disk_buf)) {
-		kfree(disk_buf);
+	if (ext2_load_group_des(fs, &gdes, group)) {
 		return ERR_DISK;
 	}
 
-	memcpy(disk_buf + offset % 512, n, sizeof(*n));
+	block += gdes.inode_table_addr;
+	void *buf = kmalloc(e2fs->block_size);
 
-	if (fs_write_sectors(fs, lba, 1, disk_buf)) {
-		kfree(disk_buf);
+	/* Load the specified block of the inode table. */
+	if (ext2_load_blocks(fs, buf, block, 1)) {
+		kfree(buf);
 		return ERR_DISK;
 	}
 
-	kfree(disk_buf);
+	/* Modify & write back. */
+	memcpy(buf + offset, inode, sizeof(*inode));
+
+	if (ext2_write_blocks(fs, buf, block, 1)) {
+		kfree(buf);
+		return ERR_DISK;
+	}
+
+	kfree(buf);
 	return GENERIC_SUCCESS;
+};
+
+
+
+size_t ext2_alloc_inode(struct file_system *fs) {
+	if (fs == NULL)          { return 0; }
+	if (fs->special == NULL) { return 0; }
+
+	struct ext2_fs *e2fs = fs->special;
+	struct ext2_group_des gdes;
+
+	/* How many blocks to read at a time. */
+	size_t to_read = e2fs->sb->inodes_in_group / e2fs->block_size / 8;
+	to_read += !!(e2fs->sb->inodes_in_group % e2fs->block_size);
+
+	uint8_t *buf = kmalloc(to_read * e2fs->block_size);
+
+	for (size_t i = 0; i < e2fs->group_count; i++) {
+		if (ext2_load_group_des(fs, &gdes, i)) {
+			return 0;
+		};
+
+		if (gdes.free_inode_count == 0) {
+			continue;
+		}
+
+		/* Load the inode usage bitmap. */
+
+		if (ext2_load_blocks(fs, buf, gdes.inode_bitmap_addr, to_read)) {
+			kfree(buf);
+			return 0;
+		}
+
+		/* Iterate over the inode usage bitmap. */
+		for (size_t j = 0; j < e2fs->sb->inodes_in_group; j++) {
+			if ((buf[j/8] & (1 << (j%8))) == 0) {
+				buf[j/8] |= (1 << (j%8));
+				ext2_write_blocks(fs, buf, gdes.inode_bitmap_addr, to_read);
+				return i * e2fs->sb->inodes_in_group + j;
+			}
+		}
+		ext2_write_blocks(fs, buf, gdes.inode_bitmap_addr, to_read);
+	}
+	kfree(buf);
+	return 0;
+};
+
+
+
+int64_t ext2_get_size(struct file_system *fs, size_t inode_num) {
+	if (fs == NULL)          { return -ERR_INVALID_PARAM; }
+	if (fs->special == NULL) { return -ERR_INVALID_PARAM; }
+
+	struct ext2_inode inode;
+
+	if (ext2_load_inode(fs, &inode, inode_num)) {
+		return -ERR_DISK;
+	}
+
+	size_t file_size = ((size_t)inode.size_high << 32) | (inode.size_low);
+	return file_size;
+};
+
+int64_t ext2_get_links(struct file_system *fs, size_t inode_num) {
+	if (fs == NULL)          { return -ERR_INVALID_PARAM; }
+	if (fs->special == NULL) { return -ERR_INVALID_PARAM; }
+
+	struct ext2_inode inode;
+
+	if (ext2_load_inode(fs, &inode, inode_num)) {
+		return -ERR_DISK;
+	}
+
+	return inode.hard_links;
+};
+
+uint16_t ext2_get_type_perm(struct file_system *fs, size_t inode_num) {
+	if (fs == NULL) { return 0xFFFF; }
+	if (inode_num < 2) { return 0xFFFF; }
+
+	struct ext2_inode inode;
+
+	if (ext2_load_inode(fs, &inode, inode_num)) {
+		return -ERR_DISK;
+	}
+
+	return inode.type_perm;
 };
 
 

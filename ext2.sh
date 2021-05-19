@@ -4,10 +4,10 @@
 
 cd root
 for DIR in $(find * -type d); do
-	e2mkdir ../temp.img:${DIR}
+	e2mkdir ../ext2.img:${DIR}
 done;
 for F in $(find * -type f); do
-	e2cp "${F}" ../temp.img:/${F}
+	e2cp "${F}" ../ext2.img:/${F}
 done;
 
 cd ..

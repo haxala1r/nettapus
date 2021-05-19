@@ -1,0 +1,15 @@
+Below is a list of things that should be done soon.
+
+	- VFS : Have the kopen() and kclose() functions, which are open() and close()
+	for kernel usage, let you open and close directories as well.
+
+	- Configuration : Have the kernel read a configuration file at boot, and extract
+	things like the font file etc. from it instead of hardcoding anything.
+
+	- Scheduler : Fix the bug in the queue and semaphore functions. The bug is that
+	if either a queue or semaphore is destroyed while there are tasks that are
+	waiting on that queue/semaphore, they will stay blocked forever.
+
+	- Scheduler : Allow switch_task() to switch to user mode code with a parameter.
+	Also allow for user-mode tasks in general, probably also adding things like
+	kernel-stacks per process, pids, uids, gids, etc. etc.

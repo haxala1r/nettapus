@@ -1,410 +1,188 @@
 
 
 #include <fs/fs.h>
-#include <disk/ide.h>
+#include <disk/disk.h>
+#include <task.h>
+
 #include <mem.h>
 #include <err.h>
 
-#include <fs/ustar.h>
-#include <fs/fat16.h>
 #include <fs/ext2.h>
 
 
-const struct fs_driver fat16_driver = {
-	.init_fs     = fat16_load_bpb,
-	.open        = fat16_file_lookup,
-	.close       = NULL,
-	.read        = fat16_read_file,
-	.write       = fat16_write_file,
-	.get_size    = NULL,
-
-	.type        = FS_FAT16
-};
 
 const struct fs_driver ext2_driver = {
-	.init_fs    = ext2_init_fs,
-	.open       = ext2_open_file,
-	.close      = NULL,
-	.read       = ext2_read_file,
-	.write      = ext2_write_file,
-	.get_size   = ext2_get_size,
+	.init_fs     = ext2_init_fs,
+	.check_drive = ext2_check_drive,
 
-	.type       = FS_EXT2
+	.open        = ext2_open,
+	.openat      = ext2_open_at,
+	.close       = NULL,
+	.read        = ext2_read_file,
+	.write       = ext2_write_file,
+
+	.get_size    = ext2_get_size,
+	.get_links   = ext2_get_links,
+	.get_type_perm= ext2_get_type_perm,
+
+	.list_files   = ext2_list_files,
+	.list_folders= ext2_list_folders,
+
+	.mknod       = ext2_mknod,
+
+	.type        = FS_EXT2
 };
 
 /* This is a list of all FS drivers in the system. These will (hopefully) be
  * loaded at run-time in the future, in form of kernel modules.
  */
 struct fs_driver fs_drivers[16] = {
-	fat16_driver,
 	ext2_driver
 };
 
 /* Will be incremented every time a driver is added. */
-size_t fs_drivers_count = 2;
+size_t fs_drivers_count = 1;
 
 
 struct file_system *root_fs = NULL;
-
-
 
 struct file_system *fs_get_root() {
 	return root_fs;
 };
 
-uint8_t fs_read_sectors(struct file_system *fs, uint64_t lba, uint32_t sector_count, void *buf) {
-	if ((lba + sector_count) > (fs->sector_count)) {
-		return ERR_INVALID_PARAM;
-	}
-
-	/* Now we need to perform the disk access. 0x0FFFFFFF is the maximum LBA that can be
-	 * accessed using 28 bits.
+size_t fs_set_root(struct file_system *fs) {
+	/* This is a convenience function that sets the root_fs variable and mounts
+	 * the new filesystem to /
 	 */
-	if ((sector_count <= 256) && ((fs->starting_sector + lba + sector_count) < 0x0FFFFFFF)) {
-		if (sector_count == 256) {
-			sector_count = 0;
-		}
-
-		/* Attempt a regular 28-bit PIO read.*/
-		if (ide_pio_read28(fs->drive_id, fs->starting_sector + lba, (uint8_t)sector_count, (uint16_t*)buf)) {
-			return ERR_DISK;
-		}
-
-	} else if (sector_count <= 65536) {
-		if (sector_count == 65536) {
-			sector_count = 0;
-		}
-
-		/* Attempt a regular 48-bit PIO read.*/
-		if (ide_pio_read48(fs->drive_id, fs->starting_sector + lba, (uint16_t)sector_count, (uint16_t*)buf)) {
-			return ERR_DISK;
-		}
-
-	} else  {
-		/* We can't do it in a single call. */
-		size_t i = 255;
-		uint8_t *i_buf = (uint8_t*)buf;
-		while (sector_count) {
-			if (sector_count < 255) {
-				i = sector_count;
-			}
-
-			if (ide_pio_read28(fs->drive_id, fs->starting_sector + lba, (uint8_t)i, (uint16_t*)i_buf)) {
-				return ERR_DISK;
-			}
-
-			sector_count -= i;
-			lba += i;
-			i_buf += i * 512;
-		}
-	}
-
-	return GENERIC_SUCCESS;
+	if (fs == NULL) { return ERR_INVALID_PARAM; }
+	root_fs = fs;
+	return init_vfs(fs);
 };
 
 
-uint8_t fs_write_sectors(struct file_system* fs, uint64_t lba, uint32_t sector_count, void* buf) {
-	if ((lba + sector_count) > (fs->sector_count)) {
-		return ERR_INVALID_PARAM;
-	}
+size_t fs_check_drive(struct drive *d) {
+	/* Checks whether the given drive contains any of the drivable filesystems.*/
+	if (d == NULL) { return 0; }
 
-	/* Now we need to perform the disk access. 0x0FFFFFFF is the maximum LBA that can be
-	 * accessed using 28 bits.
-	 */
-	if ((sector_count <= 256) && ((fs->starting_sector + lba + sector_count) < 0x0FFFFFFF)) {
-		if (sector_count == 256) {
-			sector_count = 0;
-		}
-
-		/* Attempt a regular 28-bit write. */
-		if (ide_pio_write48(fs->drive_id, fs->starting_sector + lba, (uint8_t)sector_count, (uint16_t*)buf)) {
-			return ERR_DISK;
-		}
-
-
-	} else if (sector_count <= 65536) {
-		if (sector_count == 65536) {
-			sector_count = 0;
-		}
-
-		/* Attempt a regular 48-bit PIO write.*/
-		if (ide_pio_read48(fs->drive_id, fs->starting_sector + lba, (uint16_t)sector_count, (uint16_t*)buf)) {
-			return ERR_DISK;
-		}
-
-	} else  {
-		/* We need to do multiple accesses. */
-
-		/* This is the maximum amount of sectors we can access at a time. */
-		size_t i = 255;
-
-		/* This is an iterator pointer to be able to read conveniently without losing our place. */
-		uint8_t *i_buf = (uint8_t*)buf;
-
-		while (sector_count) {
-			if (sector_count < 255) {
-				i = sector_count;
-			}
-
-			if (ide_pio_write28(fs->drive_id, fs->starting_sector + lba, (uint8_t)i, (uint16_t*)i_buf)) {
-				return ERR_DISK;
-			}
-
-			sector_count -= i;
-			lba += i;
-			i_buf += i * 512;	/* The reason i_buf was declared. */
-		}
-	}
-
-	return GENERIC_SUCCESS;
-};
-
-
-uint8_t fs_read_bytes(struct file_system* fs, void* buf, uint32_t sector, uint16_t offset, uint32_t bytes) {
-	/* This function reads {bytes} to {buf} from {fs} at {sector} at offset. */
-
-	/* Minimise unnecessary disk access. */
-	sector += offset / 512;
-	offset %= 512;
-
-	/* How many sectors in total need to be read. The formula is a bit arcane, and I
-	 * apologise for that. Unfortunately though, I can't think of a way to present this
-	 * without boring everyone too much.
-	 */
-	uint32_t sector_count = (bytes / 512) + ((bytes % 512) + 511)/512 + 1;
-
-
-	uint8_t* temp_buf = kmalloc(sector_count * 512);
-
-	if (fs_read_sectors(fs, sector, sector_count, temp_buf)) {
-		return 1;
-	}
-
-
-	//now we just need to copy the data to where it belongs, and it is done.
-	memcpy((uint8_t*)buf, temp_buf + offset, bytes);
-
-
-	kfree(temp_buf);
-	return GENERIC_SUCCESS;
-};
-
-
-uint8_t fs_write_bytes(struct file_system *fs, void *buf, uint32_t sector, uint16_t offset, uint32_t bytes) {
-	/* Reads bytes on a non-sector aligned address. */
-
-	//making sure that the values are correctly written in their respective places.
-	sector += offset / 512;
-	offset %= 512;
-
-	//how many sectors in total we need to read from the disk.
-	uint32_t sector_count = (bytes / 512) + ((bytes % 512) + 511)/512;
-	sector_count += offset%512 ? 1 : 0;	//we need to read an extra sector if the offset isn't sector-aligned.
-
-
-	//temporary buffer, because we need to read from the middle of the disk.
-	uint8_t* temp_buf = kmalloc(sector_count * 512);
-	if (temp_buf == NULL) {
-		return 1;
-	}
-
-	//in order to write, we need to do the "copying" in advance, but in order to do that,
-	//we need to actually read the first and the last sectors and write them manually,
-	//doing them as part of the loop would be terrible.
-	//We need to do this mainly because otherwise there could be significant data loss.
-	//if offset != 0. because the first offset amount of bytes in temp_buf isn't defined,
-	//the bytes on the disk would become corrupt. Thankfully, we only need to read the
-	//first and the last sectors in advance for this to work with no data loss.
-	//It took a lot of effort to make this part NOT shit itself when the first
-	//and the last sectors are the same.
-	if (offset != 0) {
-		uint8_t* disk_data = kmalloc(512);
-		if (fs_read_sectors(fs, sector, 1, disk_data)) {
-			kfree(disk_data);
-			kfree(temp_buf);
-			return 1;
-		}
-
-		//copy the disk's data to where it is relevant.
-		//this part copies the data that comes before the data to be written on the sector.
-		memcpy(temp_buf, disk_data, offset);
-		kfree(disk_data);
-	}
-	if (((offset + bytes) % 512) != 0) {
-		uint8_t* disk_data = kmalloc(512);
-		if (fs_read_sectors(fs, sector + sector_count - 1, 1, disk_data)) {
-			kfree(disk_data);
-			kfree(temp_buf);
-			return 1;
-		}
-
-		//copy the disk's data to where it is relevant.
-		//this part copies the data that comes after the data to be written on the sector.
-		memcpy(temp_buf + (sector_count - 1) * 512 + (bytes % 512), disk_data + (bytes % 512), 512 - (bytes % 512));
-
-		kfree(disk_data);
-	}
-
-
-	//fill the middle space with the data to be written.
-	memcpy(temp_buf + offset, ((uint8_t*)buf), bytes);
-
-
-	if (fs_write_sectors(fs, sector, sector_count, temp_buf)) {
-		kfree(temp_buf);
-		return 1;	//an error.
-	}
-
-
-	//we should be done if we reach here.
-	kfree(temp_buf);
-	return 0;
-}
-
-uint8_t register_fs(uint16_t drive_id, uint64_t starting_sector, uint64_t sector_count) {
-	struct file_system *nfs = kmalloc(sizeof(struct file_system));
-	if (nfs == NULL) { return ERR_OUT_OF_MEM; }
-
-	memset(nfs, 0, sizeof(struct file_system));
-	nfs->drive_id = drive_id;
-
-	nfs->starting_sector = starting_sector;
-	nfs->sector_count = sector_count;
-	nfs->next = NULL;
-	nfs->fs_type = FS_UNKNOWN;
-
-	/* Determine the file system used. */
-
-	for (size_t i = 0; i < fs_drivers_count; i++) {
+	for (size_t i = 0 ; i < fs_drivers_count; i++) {
 		if (fs_drivers[i].init_fs == NULL) {
 			continue;
 		}
 
-		uint8_t stat = fs_drivers[i].init_fs(nfs);
+		size_t stat = fs_drivers[i].check_drive(d);
 
 		if (stat == GENERIC_SUCCESS) {
-			nfs->driver = fs_drivers + i;
-			nfs->fs_type = nfs->driver->type;
-			break;
-		} else if (stat == ERR_INCOMPAT_PARAM) {
-			/* The driver can't drive this FS. */
-			continue;
-		} else {
-			/* Another error occured.  */
-			kfree(nfs);
-			return stat;
+			return fs_drivers[i].type;
 		}
+		/* Incompatible drive. */
+		continue;
 	}
 
-
-	/* We can add this to the list. */
-	if (root_fs == NULL) {
-		root_fs = nfs;
-		return GENERIC_SUCCESS;
-	}
-	if (nfs->fs_type == FS_EXT2) {
-		/* Right now, FAT16 gets priority */
-		nfs->next = root_fs;
-		root_fs = nfs;
-		return GENERIC_SUCCESS;
-	}
-
-	/* Finds the last fs in the list, then adds nfs to the end. s*/
-	struct file_system* f = root_fs;
-	while (f->next != NULL) {
-		f = f->next;
-	}
-
-	f->next = nfs;
-	return GENERIC_SUCCESS;
+	return 0;
 };
 
 
-uint8_t fs_parse_mbr(uint16_t drive_id) {
-	uint8_t *mbr = kmalloc(512);
+uint8_t register_fs(struct drive *d) {
+	if (d == NULL) { return 2; }
 
-	if (ide_pio_read28(drive_id, 0, 1, (uint16_t*)mbr)) {
-		kfree(mbr);
+	struct file_system *new_fs = kmalloc(sizeof(*new_fs));
+	memset(new_fs, 0, sizeof(*new_fs));
+	new_fs->dev = d;
+
+	/* Initialise the file system - e.g. load things like the superblock or BPB.*/
+	for (size_t i = 0 ; i < fs_drivers_count; i++) {
+
+		if (fs_drivers[i].init_fs == NULL) {
+			/* We must have reached the end of the list. */
+			kfree(new_fs);
+			return ERR_INCOMPAT_PARAM;
+		}
+
+		size_t stat = fs_drivers[i].init_fs(new_fs);
+
+		if (stat == GENERIC_SUCCESS) {
+			/* We found the right driver. */
+			new_fs->driver = fs_drivers + i;
+			break;
+		}
+		/* Incompatible drive. */
+		continue;
+	}
+
+	/* If no matching drivers were found, return an error. */
+	if (new_fs->driver == NULL) {
+		kfree(new_fs);
+		return ERR_INCOMPAT_PARAM;
+	}
+
+	/* Otherwise, add the new file system to the list. */
+	new_fs->next = root_fs;
+	root_fs = new_fs;
+
+
+	/* Load and create the root node for the file system. */
+	new_fs->root_node = kmalloc(sizeof(struct folder_tnode));
+	new_fs->root_node->folder_name = "/";
+
+	new_fs->root_node->vnode = kmalloc(sizeof(struct folder_vnode));
+	memset(new_fs->root_node->vnode, 0, sizeof(struct folder_vnode));
+
+	new_fs->root_node->vnode->inode_num = new_fs->driver->open(new_fs, "/");
+
+	new_fs->root_node->vnode->fs = new_fs;
+	new_fs->root_node->vnode->mounted = 0;
+	new_fs->root_node->vnode->mount_point = NULL;
+	new_fs->root_node->vnode->mutex = create_semaphore(1);
+
+	if (vfs_dir_load_list(new_fs->root_node->vnode)) {
+		kfree(new_fs->root_node->vnode->mutex);
+		kfree(new_fs->root_node->vnode);
 		return ERR_DISK;
 	}
 
-	/* Go through all entries. */
-	for (uint8_t i = 0; i < 4; i++) {
-		uint32_t *lmbr = (uint32_t*)(mbr + 0x1BE + i * 0x10);
+	return GENERIC_SUCCESS;
+};
 
-		/* Check the Partition Type field. If non-zero, the partition is used. */
-		if (mbr[0x1BE + i * 0x10 + 4] != 0) {
-			uint8_t stat = register_fs(drive_id, lmbr[2], lmbr[3]);
 
-			if (stat) {
-				kfree(mbr);
-				return stat;
-			};
-		}
+size_t init_fs(void) {
+	/* Goes over all available drives, and finds every filesystem it can recognize.
+	 * Return value is the amount of file systems found. 0 means no file systems
+	 * were found, and will generally be considered an error.
+	 *
+	 * TODO: it might be a good idea to add code to detect previous calls to this
+	 * function and revert them, making it possible to attempt initialisation
+	 * multiple times. That should also be done on all init_*() functions.
+	 */
+
+	if (refresh_disks()) {
+		return 0;
 	}
 
-	kfree(mbr);
-	return GENERIC_SUCCESS;
-};
+	struct drive *di = get_drive_list();
 
-uint8_t fs_parse_gpt(uint16_t drive_id) {
-	drive_id;
-	return GENERIC_SUCCESS;
-};
-
-
-
-
-uint8_t fs_init() {
-	/* Goes over all available drives, and finds every filesystem it can recognize. */
-
-	ide_drive_t *i = ide_get_first_drive();
-	uint8_t *buf = kmalloc(512);
-
-	uint8_t ret_code = 0;
-
-	while (i != NULL) {
-
-		if (ide_pio_read28(i->drive_id, 1, 1, (uint16_t*)buf)) {
-			ret_code++;
-			i = i->next;
-			continue;
-		}
-
-		/* For GPT, first 8 bytes of LBA 1 must read "EFI PART" */
-		if (memcmp((uint8_t*)buf, "EFI PART", 8)) {
-			/* MBR. */
-			ret_code = fs_parse_mbr(i->drive_id);
-			if (ret_code == ERR_INCOMPAT_PARAM) {
-				/* The device either isn't partitioned, or doesn't have an fs. */
-				break;
+	size_t found_fs = 0;  /* Keep track of how many were found. */
+	while (di != NULL) {
+		if (di->type == DRIVE_TYPE_FS) {
+			if (register_fs(di) == GENERIC_SUCCESS) {
+				found_fs += 1;
 			}
-		} else {
-			/* GPT */
-			ret_code = fs_parse_gpt(i->drive_id);
 		}
 
-		i = i->next;
+		di = di->next;
 	}
 
-	kfree(buf);
-
-	/* Check for more errors, and return. */
-	if (root_fs == NULL) {
-		return ERR_NO_RESULT;
-	}
-	if (root_fs->fs_type == FS_UNKNOWN) {
-		return ERR_NO_RESULT;
+	if (found_fs) {
+		init_vfs(root_fs);
 	}
 
-	return ret_code;
+	return found_fs;
 }
 
 
 #ifdef DEBUG
 #include <tty.h>
 
-void fs_print_state() {
+void fs_print_state(void) {
 	kputs("\nFS STATES \n{fs_type}: {starting_lba} {sector count}\n");
 	struct file_system *fs = root_fs;
 

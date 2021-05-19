@@ -20,7 +20,7 @@
 
 #include <mem.h>
 #include <pci.h>
-#include <disk/ide.h>
+#include <disk/disk.h>
 #include <fs/fs.h>
 #include <string.h>
 #include <vga.h>
@@ -133,22 +133,26 @@ void _start(struct stivale2_struct *hdr) {
 		kpanic();
 	}
 
-	/* IDE, a.k.a. ATA. This is currently our only way of accessing a disk. */
-	if (init_ide()) {
+	if (init_disk()) {
 		kpanic();
 	}
 
 	/* The file system drivers. */
-	if (fs_init()) {
+	if (!init_fs()) {
 		kpanic();
 	}
-
+	//__asm__("cli;hlt;");  /* It works fine until here. */
 	/* The TTY driver takes a file name as its init function's only parameter. This file
 	 * contains the fonts used by the driver itself. This is the reason we have to initialise
 	 * the FS drivers *before* TTY.
 	 */
-	if (tty_init("/fonts/lat9-08.psf")) {
-		kpanic();
+	while (tty_init("/fonts/lat9-08.psf")) {
+		/* Attempt to mount a different file-system. Halt if there are none. */
+		struct file_system *fs = fs_get_root();
+		if (fs_set_root(fs->next)) {
+			vga_fill_screen(0x0000ff);
+			__asm__("cli;hlt;");
+		}
 	}
 
 	if (init_kbd()) {

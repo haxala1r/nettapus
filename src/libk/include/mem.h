@@ -108,7 +108,7 @@ struct chunk_header {
 	struct chunk_header *prev;
 	struct chunk_header *next;
 	/* Right here is where the data section of the chunk goes.
-	 * You can simply do a "ptr + sizeof(*ptr)" to get to the data section.
+	 * You can simply do a "ptr + 1" to get to the data section.
 	 */
 } __attribute__((packed));
 

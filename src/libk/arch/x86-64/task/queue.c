@@ -1,4 +1,5 @@
 #include <task.h>
+#include <mem.h>
 
 /*
  * This file implements a resource queue.
@@ -62,4 +63,20 @@ void signal_queue(QUEUE *q) {
 }
 
 
+void destroy_queue(QUEUE *q) {
+	if (q == NULL) { return; }
+	/* THERE IS A BUG HERE. FIXME!
+	 * This is a serious race condition, if another process tries to wait()
+	 * this queue before we can free it they will stay blocked forever.
+	 * THIS SHOULD BE FIXED.
+	 *
+	 * IDEAS: Maybe have a spinlock preventing the structure to be modified by multiple
+	 * processes, and a variable inside the structure to indicate that the structure
+	 * has been freed? This way, we can have wait_queue() return an error
+	 * when the structure has been deleted, and the task that called wait_queue()
+	 * would have to deal with the consequences? The same could be done with
+	 * semaphores, too! That sounds good, but I'll have to do it in another commit.
+	 */
+	kfree(q);
+};
 

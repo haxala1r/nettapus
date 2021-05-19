@@ -22,28 +22,23 @@ use `make qemu`, which will simply launch qemu with the newly created disk image
 
 ## Real Hardware
 Nettapus works on real hardware as well! You can simply burn the created disk
-image to a disk, and then boot off of it. Welcome to Nettapus!
+image to a disk, and then boot off of it.
 
-# To-Dos
-Here are some things that have yet to be done:
+Keep in mind, however, that nettapus isn't capable of reading from any disk that
+isn't an IDE disk (yet!). Nettapus also depends on the existance of such a device,
+because at boot time it attempts to read from a font file (you can find it in
+root/fonts/) and, in the very near future, nettapus will attempt to read from a
+configuration file. The OS will iterate through every single valid filesystem it
+can drive (only ext2 at the time) until it finds a filesystem with ALL of the
+aforementioned files. If none are found, the kernel panics.
 
-	- Add more exception handlers.
-	- Improve threading, multitasking, IPC etc, and change the scheduling algorithm.
-	- Add PCIe support.
-	- Add better disk abstraction.
-	- Add module loading.
-	- Add an ATA DMA driver.
-
-	- Add UEFI support.
-	- Add GPT support.
-
+Since Nettapus needs these files to exist on an IDE device somewhere, a USB stick
+or a DVD will not work. Instead, you are advised to either a) Burn the resulting
+disk.img file to the hard drive or b) If you don't want to disrupt another system,
+make a new partition (on an IDE drive) and burn the ext2.img image file to that
+partition (you could also copy all files in the root directory to the newly created
+partition if you want a different size).
 
 # Contributions
-If you'd like to contibute to Nettapus, please try to follow these guidelines:
-
-	- Asterisk to the right when declaring pointers. Doing otherwise is a crime.
-	- snake_case is preferred, but there *are* cases it just doesn't work well.
-	- Divide your code into segments of closely related things with whitespaces and newlines.
-	- Divide stuff into different functions whenever possible.
-	- Ignore all of the above and write shitty code like you're gonna die tomorrow.
+See CONTRIBUTING.md
 

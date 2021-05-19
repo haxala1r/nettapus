@@ -11,9 +11,7 @@ extern "C" {
 
 /* File systems */
 #define FS_UNKNOWN   0
-#define FS_USTAR     1
-#define FS_FAT16     2
-#define FS_EXT2      3
+#define FS_EXT2      1
 
 
 /* Vnode types 						*/
@@ -41,8 +39,12 @@ struct queue;
 typedef struct semaphore SEMAPHORE;
 typedef struct queue QUEUE;
 
+struct drive;
 struct file_system;
 
+struct file_tnode;
+struct folder_tnode;
+struct file_descriptor;
 
 struct fs_driver {
 	/* Loads any necessary information on a file_system, and performs
@@ -52,198 +54,204 @@ struct fs_driver {
 	 */
 	uint8_t (*init_fs)(struct file_system *fs);
 
+	/* Returns GENERIC_SUCCESS if the driver can drive this drive, but doesn't
+	 * load any information.
+	 */
+	uint8_t (*check_drive)(struct drive *d);
+
+
 	/* Finds a file on the given file system, given a path. Returns an FS-specific
 	 * structure that will be the "special" field of the vnode, and be used by
 	 * further calls to read, write and close.
 	 */
-	void *(*open)(struct file_system *fs, char *path);
+	size_t (*open)(struct file_system *fs, char *path);
+	size_t (*openat)(struct file_system *fs, size_t folder_inode, char *name);
 
 	/* Flushes the changes made to the file, and makes sure everything matches
 	 * what is on the disk.
 	 */
-	uint8_t (*close)(struct file_system *fs, void *f);
+	uint8_t (*close)(struct file_system *fs, size_t inode);
 
 	/* Reads/writes a certain amount of bytes at offest to/from buf from/to f. */
-	uint8_t (*read)(struct file_system *fs, void *f, void *buf, size_t offset,
+	int64_t (*read)(struct file_system *fs, size_t inode, void *buf, size_t offset,
 	                size_t bytes);
-	uint8_t (*write)(struct file_system *fs, void *f, void *buf, size_t offset,
+	int64_t (*write)(struct file_system *fs, size_t inode, void *buf, size_t offset,
 	                 size_t bytes);
-	size_t (*get_size)(void *f);
+	int64_t (*get_size)(struct file_system *fs, size_t inode);
+	int64_t (*get_links)(struct file_system *fs, size_t inode);
+	uint16_t (*get_type_perm)(struct file_system *fs, size_t inode);
+
+	struct file_tnode *(*list_files)(struct file_system *fs, size_t inode, size_t *count);
+	struct folder_tnode *(*list_folders)(struct file_system *fs, size_t inode, size_t *count);
+
+	size_t (*mknod)(struct file_system *fs, size_t inode, char *name, uint16_t type_perm, size_t uid, size_t gid);
+
+
 
 	size_t type;	/* What file system it drives. */
 };
 
+
+
 struct file_system {
-	/* This holds info on what kind of file system it is. */
-	size_t fs_type;
-
-	/* The ID of the drive this file system is on. */
-	size_t drive_id;
-
-	/* The LBA of the file system's start. (i. e. first sector) */
-	uint64_t starting_sector;
-
-	/* The amount of sectors it contains. */
-	uint64_t sector_count;
+	struct drive *dev;
 
 	/* All the file systems available to the kernel are kept in a singly linked
 	 * list.
 	 */
 	struct file_system *next;
 
-	/* When a file system is initialised, this pointer will be a pointer
-	 * to FS-specific information contained in a struct by the relevant
-	 * FS driver.
-	 */
+	/* This points to FS-specific information loaded by the driver. superblock, BPB, etc. */
 	void *special;
 
-	/* Holds function pointers for all the related function. */
+	/* Holds function pointers of the driver, see above. */
 	struct fs_driver *driver;
+
+	/* The root node of the file system. */
+	struct folder_tnode *root_node;
 };
 
-struct file;
 
-/* This contains information on a file/pipe/etc. , from the point of the VFS. */
+
 struct file_vnode {
-	/* The file system it resides on. */
-	struct file_system *fs;
+	struct file_system *fs; /* The file system this node lies on. */
 
-	/* The path of the file/pipe, all pipes are kept in a special FS. */
-	char *file_name;
+	/* Whether the file is a device, pipe, regular file etc. as well as permissions. */
+	size_t type_perm;
+	size_t owner_uid;
+	size_t owner_gid;
 
-	/* This indicates the node's type. */
-	uint16_t type;
+	size_t size;
 
-	/* Amount of reading/writing streams open to this file/pipe. */
-	size_t reader_count;
-	size_t writer_count;
+	size_t link_count;
+	size_t cached_links; /* the amount of links already in cache. */
 
-	/* The size of the file in bytes, for files (i. e. last available byte's
-	 * position).
-	 *
-	 * For pipes, this indicates the place in the buffer that was written to last.
-	 */
-	volatile size_t last;
+	/* The inode number on the concrete file system. */
+	size_t inode_num;
 
-	/* This contains FS-specific info on a file, if it is a file, and it is
-	 * a pointer to the (circular) buffer if it is a pipe.
-	 */
-	void *special;
+	int32_t (*open)(struct file_vnode *vnode, struct task *t, size_t mode);
+	int64_t (*read)(struct file_descriptor *, void *, int64_t count);
+	int64_t (*write)(struct file_descriptor *, void *, int64_t count);
+	int32_t (*close)(struct task *t, struct file_descriptor *);
 
-	/* The function pointers for specific operations. */
-	int32_t (*open)(struct file_vnode *, struct task *, uint8_t);
-	int32_t (*close)(struct file *);
-	int64_t (*read)(struct file *, void *, size_t);
-	int64_t (*write)(struct file *, void *, size_t);
-
-	/* The vnodes are all kept in a doubly-linked list. */
-	struct file_vnode *next;
-	struct file_vnode *prev;
-
-	/* This is to ensure only one task can access a node at a time. */
+	/* This solves the mutual exclusion problem. */
 	SEMAPHORE *mutex;
 
-	/* These queues make it easier for a task to wait for data on a pipe etc. */
+	/* These two help us notify other processes when the file is written to/read
+	 * from.
+	 */
 	QUEUE *read_queue;
 	QUEUE *write_queue;
+
+	size_t streams_open;
+
+	/* The area of memory where the data is kept for a pipe. Unused for files. */
+	void *pipe_mem;
+};
+
+struct file_tnode {
+	char *file_name;
+	struct file_vnode *vnode;
+	struct file_tnode *next;   /* tnodes are kept in a linked list. */
+};
+
+struct folder_tnode;
+
+struct folder_vnode {
+	struct file_system *fs; /* The file system this node lies on. */
+
+	uint16_t type_perm;
+	uint32_t uid;
+	uint32_t gid;
+
+	size_t link_count;
+	size_t cached_links; /* the amount of links already in cache. */
+
+	struct file_tnode *subfiles;
+	struct folder_tnode *subfolders;
+
+	size_t subfile_count;
+	size_t subfolder_count;
+
+	size_t inode_num;
+
+	/* Whether the folder is currently mounted, and if so, where. */
+	size_t mounted;
+	struct folder_tnode *mount_point;
+
+	/* This solves the mutual exclusion problem. */
+	SEMAPHORE *mutex;
+
+	/* A folder doesn't need any queues.*/
+
+	size_t streams_open;
+};
+
+struct folder_tnode {
+	char *folder_name;
+	struct folder_vnode *vnode;
+	struct folder_tnode *next;   /* tnodes are kept in a linked list. */
 };
 
 
 
-/* This contains information on a file specific to a process (e. g. the current
- * position on the file), from the point of the process. Each process has
- * its own list of these.
- */
-struct file {
-	/* The vnode that keeps relevant info on the file. Multiple file descriptors
-	 * can point to the same node. */
-	struct file_vnode *node;
+struct file_descriptor {
+	void *node;
+	size_t file; /* Whether it points to a file or folder. 1 if file. */
 
-	/* The file descriptor used to access this struct, by the process. */
-	int32_t file_des;
+	int32_t fd;  /* The actual number used to access this descriptor. */
 
-	/* Where exactly, e.g. a kread() call will start reading from. */
-	uint64_t position;
+	size_t pos;
+	size_t mode;
 
-	/* Read/Write. 0 = Read, 1 = Write. */
-	uint8_t mode;
+	struct file_descriptor *next;
+};
 
-	/* This is currently only used to determined whether the file descriptor
-	 * is blocking or not.
-	 */
-	uint8_t flags;
-
-	/* The file structs are always kept in a doubly linked list for each process. */
-	struct file *next;
-	struct file *prev;
-} __attribute__((packed));
+struct file_system *fs_get_root();
+size_t fs_set_root(struct file_system *fs);
 
 
 
+size_t fs_check_drive(struct drive *d);
 char **fs_parse_path(char *path);
-/* Frees the arrays allocated with fs_parse_path. */
 void fs_free_path(char **arr);
 
-uint8_t fs_read_sectors(struct file_system *fs, uint64_t lba,
-                        uint32_t sec_count, void *buf);
-uint8_t fs_write_sectors(struct file_system *, uint64_t, uint32_t, void *);
 
-/* These may be removed in the foreseeable future. */
-uint8_t fs_read_bytes(struct file_system *, void *, uint32_t, uint16_t, uint32_t);
-uint8_t fs_write_bytes(struct file_system *, void *, uint32_t, uint16_t, uint32_t);
+size_t vfs_dir_load_list(struct folder_vnode *vnode);
+struct file_vnode *vfs_search_file_vnode(char *path);
 
+size_t vfs_unload_fnode(struct file_vnode *f);
+size_t vfs_unload_dnode(struct folder_vnode *f);
 
+/* These are the functions used for regular files. */
+int32_t vfs_open_file(struct file_vnode *, struct task *, size_t mode);
+int64_t vfs_read_file(struct file_descriptor *, void *, int64_t count);
+int64_t vfs_write_file(struct file_descriptor *, void *, int64_t count);
+int32_t vfs_close_file(struct task *, struct file_descriptor *);
 
-/* Isn't implemented yet. */
-uint8_t fs_list_dirs(struct file_system, char*);
+int64_t vfs_read_pipe(struct file_descriptor *fdes, void *buf, int64_t amount);
+int64_t vfs_write_pipe(struct file_descriptor *fdes, void *buf, int64_t amount);
 
+/* Functions used for operations on nodes. */
+struct file_descriptor *vfs_find_fd(struct task *t, int32_t fd);
+struct file_vnode *mknode_file(char *path);
 
-/* These are some of the VFS stuff. Might be a good idea to put these in
- * a different header.
- */
+struct file_descriptor *vfs_create_fd(struct task *t, void *node, size_t file, size_t mode);
 
-int64_t read_pipe(struct file *f, void *buf, size_t bytes);
-int64_t write_pipe(struct file *f, void *buf, size_t bytes);
-int64_t close_pipe(struct file *f);
-
-int64_t read_file(struct file *f, void *buf, size_t bytes);
-int64_t write_file(struct file *f, void *buf, size_t bytes);
-int64_t close_file(struct file *f);
-
-
-int32_t kopen_fs(struct file_system *fs, char *fname, uint8_t mode);
-int32_t kopen(char *fname, uint8_t mode);
-int32_t pipeu(struct task *t, int32_t *ret);
-
+int32_t pipeu(struct task *t, int32_t ret[]);
+int32_t kopen(char *path, size_t mode);
+int64_t kread(int32_t fd, void *buf, int64_t amount);
+int64_t kwrite(int32_t fd, void *buf, int64_t amount);
 int32_t kclose(int32_t fd);
 
-int64_t kread(int32_t fd, void *buf, size_t bytes);
-int64_t kwrite(int32_t fd, void *buf, size_t bytes);
+size_t init_vfs(struct file_system *root);
+size_t init_fs(void);
 
-int32_t kseek(int32_t fd, uint64_t where);
 
-/* Node management utilities. */
-struct file_vnode *vfs_create_node(uintptr_t open, uintptr_t close,
-                                  uintptr_t read, uintptr_t write,
-                                  uint16_t type);
-uint8_t vfs_destroy_node(struct file_vnode *node);
-struct file *vfs_fd_lookup(struct task *t, int32_t fd);
-struct file_vnode *vfs_vnode_lookup(char *file_name);
-int32_t vfs_create_descriptor(struct task *t, struct file_vnode *n,
-                              uint8_t mode, uint8_t flags);
-int32_t vfs_destroy_descriptor(struct task *t, struct file *f);
-
-uint8_t fs_parse_mbr(uint16_t);
-struct file_system* fs_get_root();
-uint8_t fs_init();
 
 
 #ifdef DEBUG
-
-void fs_print_state();
-
-void vfs_print_nodes(void);
-
+void fs_print_state(void);
 #endif
 
 

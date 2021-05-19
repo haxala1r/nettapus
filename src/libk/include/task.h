@@ -25,7 +25,7 @@ extern "C" {
 
 
 
-struct file;
+struct file_descriptor; /* Definition in <fs/fs.h>*/
 struct task_registers {
 	/* General purpose registers. */
 	uint64_t rax, rbx, rcx, rdx, rdi, rsi, r8, r9, r10, r11, r12, r13, r14, r15;
@@ -49,7 +49,7 @@ struct task {
 	struct task_registers reg;
 
 	/* File descriptors open for this process.  */
-	struct file *files;
+	struct file_descriptor *fds;
 
 	/* The amount of time this task has remaining (in ticks) */
 	uint64_t ticks_remaining;
@@ -105,10 +105,12 @@ void unlock_task_switches();
 SEMAPHORE *create_semaphore(int32_t max_count);
 void acquire_semaphore(SEMAPHORE *s);
 void release_semaphore(SEMAPHORE *s);
+void destroy_semaphore(SEMAPHORE *s);
 
 /* Some stuff to make it easier to have processes wait on a resource. */
 void wait_queue(QUEUE *q);
 void signal_queue(QUEUE *q);
+void destroy_queue(QUEUE *q);
 
 
 /* This is the low-level task switching function. It saves the registers to the first

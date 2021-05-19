@@ -59,7 +59,7 @@ void initialise_task(struct task *t, void (*main)(), uint64_t pml4t, uint64_t fl
 
 	t->next = NULL;
 	t->ticks_remaining = TASK_DEFAULT_TIME;
-	t->files = current_task ? current_task->files : NULL;	/* VFS layer will initialise this. */
+	t->fds = current_task ? current_task->fds : NULL;	/* VFS layer will initialise this. */
 };
 
 
@@ -276,7 +276,7 @@ uint8_t init_scheduler() {
 
 	current_task->next = NULL;
 	current_task->state = TASK_STATE_RUNNING;
-	current_task->files = NULL;	/* The VFS layer will initialise this. */
+	current_task->fds = NULL;	/* The VFS layer will initialise this. */
 	current_task->ticks_remaining = TASK_DEFAULT_TIME;
 
 	/* Initialise the global variables. */

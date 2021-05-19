@@ -36,42 +36,43 @@ heap_t *kgetHeap() {
 
 
 uint8_t unlink(chunk_header_t* h) {
-	//unlinks a chunk.
+	/* Unlinks a chunk. */
 	if (h == NULL) {
-		return 1;	//error on NULL.
+		return ERR_INVALID_PARAM;
 	}
+
 	if (h->next != NULL) {
-		//after all if the next entry is NULL we can't do much.
 		h->next->prev = h->prev;
 	}
 	if (h->prev != NULL) {
-		//same applies for the previous entry.
 		h->prev->next = h->next;
 	}
 
-	/* Ensure things can't go wrong because of leftover data. */
 	h->prev = NULL;
 	h->next = NULL;
 	return GENERIC_SUCCESS;
 }
 
 
-uint8_t link(chunk_header_t* h1, chunk_header_t* h2) {
+uint8_t link(chunk_header_t *h1, chunk_header_t *h2) {
+	/* Links two chunks. */
 	if ((h1 == NULL) || (h2 == NULL)) {
-		return 1;	//error on NULL value.
+		return ERR_INVALID_PARAM;
 	}
-	/* Keep in mind this function does not automatically unlink- it *just* links.
-	 * It also assumes "h1 < h2" evaluates to true.
-	 */
-	h1->next = h2;
-	h2->prev = h1;
 
+	if (h1 < h2) {
+		h1->next = h2;
+		h2->prev = h1;
+	} else {
+		h2->next = h1;
+		h1->prev = h2;
+	}
 	return GENERIC_SUCCESS;
 }
 
 
 
-chunk_header_t* divideChunk(uint64_t size, chunk_header_t* chunk) {
+chunk_header_t *divideChunk(uint64_t size, chunk_header_t* chunk) {
 	if (chunk == NULL) {
 		return NULL;
 	}
@@ -87,7 +88,7 @@ chunk_header_t* divideChunk(uint64_t size, chunk_header_t* chunk) {
 		 */
 		size += 1;
 	}
-	if (chunk->size <= (size + sizeof(chunk_header_t) + 16)) {
+	if (chunk->size <= (size + sizeof(chunk_header_t))) {
 		/* This makes sure that there is enough space to actually split. */
 		return NULL;
 	}
@@ -146,7 +147,6 @@ chunk_header_t* mergeChunk(chunk_header_t *h1, chunk_header_t *h2) {
 
 
 
-#include <tty.h>
 /* Now comes the legendary malloc and free! */
 void *kmalloc(uint64_t bytes) {
 	if (bytes == 0) {
@@ -214,8 +214,6 @@ void *kmalloc(uint64_t bytes) {
 			unlink(chunk);
 
 			return (void*)(((uintptr_t)chunk) + sizeof(chunk_header_t));
-
-
 		}
 	}
 	/* No chunks left. */
@@ -230,13 +228,16 @@ uint8_t kfree(void *ptr) {
 	/* I'm going to use two variables to loop over free chunks,
 	 * in order to find where this chunk we're freeing should be placed.
 	 * We're also going to be merging adjacent free chunks if we find any along the way.
-	 * this is to make sure the heap doesn't get too fragmented.
 	 */
 
 	chunk_header_t *chunk = (chunk_header_t*)((uintptr_t)ptr - sizeof(chunk_header_t));
 
-	heap_t* hp = kgetHeap();
+	heap_t *hp = kgetHeap();
 
+	if (hp->first_free == NULL) {
+		hp->first_free = chunk;
+		return 0;
+	}
 
 	chunk_header_t *i = hp->first_free;
 	chunk_header_t *j = i->next;
@@ -259,9 +260,8 @@ uint8_t kfree(void *ptr) {
 
 	while (1) {
 		if (i == NULL) {
-			//if it reaches here, then dafuq?
-			kputs("\nFUCK BITH15\n");
-			return 1;	//might use a more descriptive error.
+			/* This should be impossible, but never hurts to check.*/
+			return 0xff;
 		}
 		if (j == NULL) {
 			/* We are at the end of the list, and i holds the last element.
@@ -286,8 +286,6 @@ uint8_t kfree(void *ptr) {
 		}
 
 
-
-
 		if ((chunk > i) && (chunk < j)) {
 			/* If chunk is between i and j, then this is where it should be in the linked list. */
 			i->next = chunk;
@@ -300,8 +298,6 @@ uint8_t kfree(void *ptr) {
 		}
 
 
-
-
 		/* Repeat until a match is found. */
 		i = j;
 		j = j->next;
@@ -310,50 +306,10 @@ uint8_t kfree(void *ptr) {
 	return 1;
 }
 
-//allocates more pages for heap usage. Takes argument in bytes,
-//rounded up to multiple of 4096 (0x1000) because of paging.
-
-//uint8_t kenlargeHeap(uint64_t amount) {
-
-	////rounds up.
-	//uint64_t amount_pages = addr_to_page(amount);
-	//if (amount % 0x1000) {
-		//amount_pages += 1;
-	//}
-	//heap_t *hp = kgetHeap();
-	////if no heap is present yet, then make one by allocating literally a single page.
-	////note: type casts are generally there to shut the compiler up.
-	//if ((void*)hp->start == NULL) {
-		//return 1;
-		///* YOU SHOULD ALWAYS SET UP THE
-		   //FIRST PAGE OF THE HEAP YOURSELF. */
-	//}
-
-
-	////now continue as usual, and try to allocate as many pages as needed
-	////starting from the end of the current heap (in the virtual address space.)
-
-	//for (size_t i = 0; i < amount_pages; i++) {
-		//if ((void*)hp->end == NULL) {
-			//return 1;	//then we got a huge fucking problem. I should probably handle this, but fuck that.
-		//}
-		//if (!kmmapv(hp->end)) {
-			////if successful, then we gotta increment HEAP_END
-			//hp->end += 0x1000;
-		//} else {
-			////if not successful, then we can't do much anymore.
-			////simply return an error.
-			//return 1;
-		//}
-	//}
-
-	//return GENERIC_SUCCESS;
-//}
 
 uint8_t init_heap(void) {
 	/* Maps 256 pages to the heap. 0xFFFFFFFFA0000000 is the kernel's heap's address.*/
-	//while (1) { asm("hlt;"); };
-	if (map_memory(page_to_addr(allocpps(256)), 0xFFFFFFFFA0000000, 256, kgetPML4T())) {
+	if (map_memory(page_to_addr(allocpps(256)), 0xFFFFFFFFA0000000, 512, kgetPML4T())) {
 		return 1;
 	}
 	krefresh_vmm();
@@ -362,17 +318,14 @@ uint8_t init_heap(void) {
 
 	kheap_default.end = kheap_default.start + 256 * 0x1000;
 
-
-
 	/* Now we make the first chunk, "the wilderness".
 	 * Whenever we need a chunk, we will simply chop a part of this chunk,
 	 * and hand it to whomever needs it. (or just hand out another free chunk
 	 * if there is a suitable one).
 	 */
-
 	kheap_default.first_free = (chunk_header_t*)kheap_default.start;
 
-	/* Beware! The size attribute of a chunk only contains info about its data section! */
+	/* Beware! The size attribute of a chunk only counts its data section! */
 	kheap_default.first_free->size = (kheap_default.end - kheap_default.start) - sizeof(chunk_header_t);
 
 	kheap_default.first_free->prev = NULL;
@@ -380,10 +333,6 @@ uint8_t init_heap(void) {
 
 	return GENERIC_SUCCESS;
 }
-
-
-
-
 
 
 #ifdef DEBUG
@@ -412,7 +361,7 @@ void heap_print_state(void) {
 
 };
 
-#endif
+#endif /* DEBUG*/
 
 
 

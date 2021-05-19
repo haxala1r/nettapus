@@ -26,6 +26,7 @@ void acquire_semaphore(SEMAPHORE *s) {
 	/* This is where the spinlock would go, but we don't have
 	 * SMP, so this works well enough.
 	 */
+	lock_scheduler();
 	lock_task_switches();
 
 
@@ -59,6 +60,7 @@ void acquire_semaphore(SEMAPHORE *s) {
 	}
 
 	/* This is where the lock for this semaphore would be released. */
+	unlock_scheduler();
 	unlock_task_switches();
 
 	return;
@@ -91,3 +93,21 @@ void release_semaphore(SEMAPHORE *s) {
 
 	return;
 };
+
+
+
+void destroy_semaphore(SEMAPHORE *s) {
+	if (s == NULL) { return; }
+
+	/* THERE IS A BUG HERE. FIXME!
+	 * This is a serious race condition, if another process tries to acquire()
+	 * this semaphore they will stay blocked forever. THIS SHOULD BE FIXED.
+	 * see destroy_queue() in queues.c for ideas on how to fix it.
+	 */
+
+	acquire_semaphore(s);
+	lock_scheduler();
+
+	kfree(s);
+};
+

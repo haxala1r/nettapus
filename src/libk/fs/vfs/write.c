@@ -1,116 +1,84 @@
 #include <fs/fs.h>
 #include <task.h>
+#include <string.h>
+#include <err.h>
 
-/* Now we need to include the headers for the FS drivers. */
-#include <fs/ustar.h>
-#include <fs/fat16.h>
+int64_t vfs_write_file(struct file_descriptor *fdes, void *buf, int64_t amount) {
+	if (fdes == NULL)       { return -ERR_INVALID_PARAM; }
+	if (buf == NULL)        { return -ERR_INVALID_PARAM; }
+	if (fdes->node == NULL) { return -ERR_INVALID_PARAM; }
 
+	struct file_vnode *node = fdes->node;
+	acquire_semaphore(node->mutex);
 
-int64_t write_file(struct file *f, void *buf, size_t bytes) {
-	/* This is the generic write function for files. */
-
-	/* Some NULL checks. we don't want the system to crash while writing to a file do we? */
-	if (f == NULL) 				{ return -1; }
-	if (f->node == NULL) 		{ return -1; }
-	if (f->node->fs == NULL) 	{ return -1; }
-	if (f->mode != 1) 			{ return -1; }
-
-	acquire_semaphore(f->node->mutex);
-
-	uint8_t status = f->node->fs->driver->write(f->node->fs, f->node->special, \
-	                                            buf, f->position, bytes);
-
-	/* Write should be complete, check for error, update stuff, then return. */
-	if (status) {
-		/* Error. */
-		release_semaphore(f->node->mutex);
-		return -status;
+	/* Determine the exact amount we can write. */
+	int64_t to_write = amount;
+	if ((to_write + fdes->pos) > node->size) {
+		to_write = node->size - fdes->pos;
 	}
-	f->position += bytes;
 
-	release_semaphore(f->node->mutex);
-	return bytes;
+	/* Request the filesystem driver to write to disk. */
+	int64_t stat = node->fs->driver->write(node->fs, node->inode_num, buf, fdes->pos, to_write);
+
+	release_semaphore(node->mutex);
+	if (stat > 0) {
+		fdes->pos += stat;
+	}
+	return stat;
 };
 
 
 
-int64_t write_pipe(struct file *f, void *buf, size_t bytes) {
-	/* This is the generic write function for pipes. It writes to a pipe
-	 * and blocks if there isn't space on the pipe.
-	 */
+int64_t vfs_write_pipe(struct file_descriptor *fdes, void *buf, int64_t amount) {
+	if (fdes == NULL)       { return -ERR_INVALID_PARAM; }
+	if (buf == NULL)        { return -ERR_INVALID_PARAM; }
+	if (fdes->node == NULL) { return -ERR_INVALID_PARAM; }
 
-	if (f == NULL) 						{ return -1; }
-	if (f->node == NULL) 				{ return -1; }
-	if (f->node->special == NULL) 		{ return -1; }
-	if (f->node->mutex == NULL) 		{ return -1; }
-	if (buf == NULL) 					{ return -1; }
+	struct file_vnode *node = fdes->node;
+	acquire_semaphore(node->mutex);
 
-	if (bytes <= 0) 					{ return  0; }
-	if (f->node->reader_count == 0) 	{ return -1; }
+	int64_t ret = 0;
+	while (amount > 0) {
+		/* For pipes, the size attribute indicates the amount of data stored. */
+		int64_t to_write = ((int64_t)(DEFAULT_PIPE_SIZE - node->size) > amount) ? amount : (int64_t)(DEFAULT_PIPE_SIZE - node->size);
 
-	acquire_semaphore(f->node->mutex);
-
-	/* The upcoming loop modifies "bytes".*/
-	size_t to_read = bytes;
-
-	/* Block if there isn't enough space. */
-	while (bytes > (DEFAULT_PIPE_SIZE - f->node->last)) {
-		if (f->flags & FILE_FLAG_NONBLOCK) {
-			release_semaphore(f->node->mutex);
-			return 0;
-		}
-
-		/* This waits until there's room on the pipe. */
-		if (f->node->last == DEFAULT_PIPE_SIZE) {
-			/* Add ourselves to the queue without blocking yet. */
+		if (to_write == 0) {
+			/* There isn't enough space on the pipe. Wait on a queue. */
 			lock_task_switches();
-			wait_queue(f->node->write_queue);
 
-			release_semaphore(f->node->mutex);
+			wait_queue(node->write_queue);
+			release_semaphore(node->mutex);
+			signal_queue(node->read_queue);
 
-			/* Now we can block as normal. */
 			unlock_task_switches();
-
-			/* We got unblocked, there's room to write to. */
-			acquire_semaphore(f->node->mutex);
+			acquire_semaphore(node->mutex);
+			continue;
 		}
 
-		if (bytes > (DEFAULT_PIPE_SIZE - f->node->last)) {
-			memcpy(f->node->special + f->node->last, buf, DEFAULT_PIPE_SIZE - f->node->last);
+		/* Copy the data from the buffer to the pipe. */
+		memcpy(node->pipe_mem + node->size, buf, to_write);
 
-			buf += (DEFAULT_PIPE_SIZE - f->node->last);
-			bytes -= (DEFAULT_PIPE_SIZE - f->node->last);
-			f->node->last = DEFAULT_PIPE_SIZE;
-
-			if (bytes <= 0) {
-				release_semaphore(f->node->mutex);
-				return 0;
-			}
-		}
+		amount -= to_write;
+		node->size += to_write;
+		buf += to_write;
+		ret += to_write;
 	}
 
-	/* This handles the rest */
-	memcpy(f->node->special + f->node->last, buf, bytes);
-	f->node->last += bytes;
-
-	release_semaphore(f->node->mutex);
-	signal_queue(f->node->read_queue);
-	return to_read;
+	signal_queue(node->read_queue);
+	release_semaphore(node->mutex);
+	return ret;
 };
 
-int64_t write(struct task *t, int32_t file_des, void *buf, size_t bytes) {
-	/* This function writes to a file/node, at the position file_des indicates. */
+int64_t kwrite(int32_t fd, void *buf, int64_t amount) {
+	if (buf == NULL) { return -ERR_INVALID_PARAM; }
+	if (fd < 0)      { return -ERR_INVALID_PARAM; }
 
-	if (t == NULL)			{ return -1; };
+	struct file_descriptor *fdes = vfs_find_fd(get_current_task(), fd);
+	if (fdes == NULL) { return -ERR_INVALID_PARAM; }
+	if (!fdes->file)   { return -ERR_INVALID_PARAM; }
 
-	struct file *f = vfs_fd_lookup(t, file_des);
-	if (f == NULL)				{ return -2; };
-	if (f->node == NULL)		{ return -3; };
-	if (f->mode != FD_WRITE) 	{ return -1; };
+	struct file_vnode *fnode = fdes->node;
+	if (fnode == NULL) { return -ERR_INVALID_PARAM; }
 
-	return f->node->write(f, buf, bytes);
-};
-
-int64_t kwrite(int32_t file_des, void *buf, size_t bytes) {
-	return write(get_current_task(), file_des, buf, bytes);
+	return fnode->write(fdes, buf, amount);
 };

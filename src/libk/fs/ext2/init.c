@@ -1,38 +1,64 @@
+#include <err.h>
+#include <disk/disk.h>
 #include <fs/fs.h>
 #include <fs/ext2.h>
-
-#include <err.h>
 #include <mem.h>
 
 
+
 uint8_t ext2_init_fs(struct file_system *fs) {
-	if (fs == NULL) { return ERR_INVALID_PARAM; }
+	if (fs == NULL)       { return ERR_INVALID_PARAM; }
+	if (fs->dev == NULL)  { return ERR_INVALID_PARAM; }
 
 	struct ext2_superblock *sb = kmalloc(512);
-	if (sb == NULL) { return ERR_OUT_OF_MEM; }
 
-	if (fs_read_sectors(fs, 2, 1, sb)) {
+	if (drive_read_sectors(fs->dev, sb, 2, 1)) {
 		kfree(sb);
 		return ERR_DISK;
 	}
 
 	if (sb->ext2_signature != 0xef53) {
-		/* The FS isn't ext2. */
 		kfree(sb);
 		return ERR_INCOMPAT_PARAM;
 	}
 
+	struct ext2_fs *e2fs = kmalloc(sizeof(*e2fs));
+	e2fs->sb = sb;
+	e2fs->block_size = (1024 << sb->log2_block_size);
+	if (e2fs->block_size == 1024) {
+		e2fs->group_des_table_block = 2;
+	} else {
+		e2fs->group_des_table_block = 1;
+	}
+	e2fs->group_count = sb->inode_count / sb->inodes_in_group + !!(sb->inode_count % sb->inodes_in_group);
 
-	struct ext2_fs *fs_ext2 = kmalloc(sizeof(struct ext2_fs));
-	fs_ext2->sb = kmalloc(sizeof(struct ext2_superblock));
+	if (e2fs->group_count != (sb->block_count / sb->blocks_in_group + !!(sb->block_count % sb->blocks_in_group))) {
+		kfree(sb);
+		kfree(e2fs);
+		return ERR_INCOMPAT_PARAM;
+	}
 
-	memcpy(fs_ext2->sb, sb, sizeof(struct ext2_superblock));
+	fs->special = e2fs;
+	return GENERIC_SUCCESS;
+};
+
+
+uint8_t ext2_check_drive(struct drive *d) {
+	if (d == NULL) { return ERR_INVALID_PARAM; }
+
+	struct ext2_superblock *sb = kmalloc(512);
+
+	if (drive_read_sectors(d, sb, 2, 1)) {
+		kfree(sb);
+		return ERR_DISK;
+	}
+
+	if (sb->ext2_signature != 0xef53) {
+		kfree(sb);
+		return ERR_INCOMPAT_PARAM;
+	}
+
 	kfree(sb);
-
-	fs_ext2->group_des_table_block = fs_ext2->sb->log2_block_size ? 1 : 2;
-	fs_ext2->block_size = (1024 << fs_ext2->sb->log2_block_size);
-	fs->special = fs_ext2;
-
 	return GENERIC_SUCCESS;
 };
 

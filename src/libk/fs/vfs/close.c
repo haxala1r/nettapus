@@ -1,38 +1,62 @@
 #include <fs/fs.h>
-#include <mem.h>
+#include <err.h>
 #include <task.h>
+#include <mem.h>
 
-#include <fs/ustar.h>
-#include <fs/fat16.h>
+int32_t vfs_close_file(struct task *t, struct file_descriptor *fd) {
+	if (fd == NULL)     { return -ERR_INVALID_PARAM; }
+	if (t == NULL)      { return -ERR_INVALID_PARAM; }
+	if (t->fds == NULL) { return -ERR_INVALID_PARAM; }
 
+	struct file_descriptor *i = t->fds;
 
-
-
-int32_t close(struct task *t, int32_t file_des) {
-	/* Takes a file descriptor, and "closes" the file corresponding to that descriptor.
-	 * Also frees the file's associated vnode if there are no other "streams" open to it.
-	 */
-
-	struct file *f = vfs_fd_lookup(t, file_des);
-	if (f == NULL)       { return -1; }
-	if (f->node == NULL) { return -1; }
-
-	struct file_vnode *node = f->node;
-
-	vfs_destroy_descriptor(t, f);
-
-	/* Unlink the node if no streams are left open. */
-	if ((node->reader_count == 0) && (node->writer_count == 0)) {
-		/* We also need to free the node.
-		 * BUG: This function can go wackity-wack if another process is creating
-		 * a file descriptor to this node at the same time.
-		 */
-		vfs_destroy_node(node);
+	while ((i != NULL) && (i->next != fd)) {
+		i = i->next;
 	}
 
-	return 0;
+	if (i == NULL) {
+		/* The file descriptor was not found. */
+		return -ERR_INVALID_PARAM;
+	}
+
+	/* i points to the element before fd. */
+	i->next = i->next->next; /* Unlink fd. */
+
+	/* Decrease stream count, and unload the node if that leaves it unused. */
+	if (fd->file) {
+		struct file_vnode *node = fd->node;
+		node->streams_open--;
+		if ((node->streams_open == 0) && (node->cached_links == 0)) {
+			// Unload node.
+			vfs_unload_fnode(node);
+		}
+	} else {
+		struct folder_vnode *node = fd->node;
+		node->streams_open--;
+		if ((node->streams_open == 0) && (node->cached_links == 0)) {
+			vfs_unload_dnode(node);
+		}
+	}
+
+	kfree(fd);
+
+	return GENERIC_SUCCESS;
 };
 
+
 int32_t kclose(int32_t fd) {
-	return close(get_current_task(), fd);
+	if (fd < 0) { return -ERR_INVALID_PARAM; }
+
+	struct file_descriptor *fdes = vfs_find_fd(get_current_task(), fd);
+	if (fdes == NULL) { return -ERR_INVALID_PARAM; }
+
+	if (fdes->file) {
+		struct file_vnode *fnode = fdes->node;
+
+		return fnode->close(get_current_task(), fdes);
+	} else {
+		/* TODO */
+	}
+	return GENERIC_SUCCESS;
 };
+
