@@ -25,7 +25,7 @@ struct IDT_entry {
 	uint16_t offset_mid16;
 	uint32_t offset_hi32;
 	uint32_t zero32;
-	
+
 } __attribute__((packed));
 
 struct IDT_descriptor {
@@ -46,20 +46,16 @@ extern void exception_divide_by_zero();
 extern void exception_double_fault();
 
 
-void sleep(uint32_t);
 void put_time();
 
 uint8_t init_interrupts();
 
-
 void kpanic();
-
-
 
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif 
+#endif
 

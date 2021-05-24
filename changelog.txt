@@ -1,0 +1,24 @@
+	- Added new header and C files config.h and config.c allowing nettapus to now
+	read a configuration file on boot to load settings. The settings loaded
+	from this file will grow over time, but I do plan on hardcoding defaults in
+	case the file isn't found. The system just loads variables from the file,
+	each system component is responsible for asking for the appropriate variables
+	and also having default values in case the user doesn't specify them.
+	This takes care of one of the TODOs.
+
+	- Fixed various instances of undefined behaviour in the kernel. This ranges
+	from the NULL-ptr usage in the VMM, to the various out-of-bounds shifts in
+	the PMM, to a wrong mapping in (again) the VMM. Also added an option to
+	the Makefile to compile with ubsan has been added.
+
+	- A serial driver has been added, in order to ease debugging. Various
+	debug messages will be added over time. The driver cannot accept input, it's
+	more of a debug output for now. Also, this takes care of one of the TODOs.
+
+	- A mysterious bug where resetting QEMU from the toolbar after running
+	Nettapus caused Nettapus to behave unexpectedly. This most likely resulted
+	from one of the UBs that was fixed.
+
+	- Fixed multiple bugs in the ext2 driver that resulted in the wrong calculation of
+	a directory entry's name length. (I don't even know how I managed to screw
+	that up in the first place).

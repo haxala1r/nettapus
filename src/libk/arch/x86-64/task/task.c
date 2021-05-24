@@ -28,7 +28,7 @@ int32_t task_switch_postponed = 0;
 
 struct task *get_current_task() {
 	return current_task;
-};
+}
 
 
 void initialise_task(struct task *t, void (*main)(), uint64_t pml4t, uint64_t flags, uint64_t stack) {
@@ -60,7 +60,7 @@ void initialise_task(struct task *t, void (*main)(), uint64_t pml4t, uint64_t fl
 	t->next = NULL;
 	t->ticks_remaining = TASK_DEFAULT_TIME;
 	t->fds = current_task ? current_task->fds : NULL;	/* VFS layer will initialise this. */
-};
+}
 
 
 uint8_t create_task(void (*main)()) {
@@ -91,7 +91,7 @@ uint8_t create_task(void (*main)()) {
 
 	unlock_scheduler();
 	return 0;
-};
+}
 
 
 void block_task() {
@@ -99,7 +99,7 @@ void block_task() {
 	current_task->state = TASK_STATE_BLOCK;
 	yield();
 	unlock_scheduler();
-};
+}
 
 void unblock_task(struct task *t) {
 	lock_scheduler();
@@ -115,7 +115,7 @@ void unblock_task(struct task *t) {
 	}
 
 	unlock_scheduler();
-};
+}
 
 void yield() {
 	/* This is a function that switches to the next task on the queue.
@@ -193,7 +193,7 @@ void yield() {
 	current_task->next = NULL;
 
 	switch_task(&(last->reg), &(current_task->reg));
-};
+}
 
 
 
@@ -223,7 +223,7 @@ void scheduler_irq0() {
 		yield();
 		unlock_scheduler();
 	}
-};
+}
 
 
 
@@ -238,11 +238,11 @@ void scheduler_irq0() {
 void lock_scheduler() {
 	/* This will hopefully be changed to a spinlock soon. */
 	sched_lock++;
-};
+}
 
 void lock_task_switches() {
 	task_switch_lock++;
-};
+}
 
 
 void unlock_scheduler() {
@@ -250,7 +250,7 @@ void unlock_scheduler() {
 		return;
 	}
 	sched_lock--;
-};
+}
 
 void unlock_task_switches() {
 	if (task_switch_lock == 0) {
@@ -263,19 +263,20 @@ void unlock_task_switches() {
 		yield();
 		unlock_scheduler();
 	}
-};
+}
 
 
 uint8_t init_scheduler() {
 	lock_scheduler();
 
-	current_task = kmalloc(sizeof(struct task));
+	current_task = kmalloc(sizeof(*current_task));
 	if (current_task == NULL) {
 		return 1;
 	}
 
-	current_task->next = NULL;
+
 	current_task->state = TASK_STATE_RUNNING;
+	current_task->next = current_task;
 	current_task->fds = NULL;	/* The VFS layer will initialise this. */
 	current_task->ticks_remaining = TASK_DEFAULT_TIME;
 
@@ -287,7 +288,7 @@ uint8_t init_scheduler() {
 	unlock_scheduler();
 
 	return 0;
-};
+}
 
 
 
@@ -302,7 +303,7 @@ void print_task(struct task *t) {
 	kputs(" ");
 	kputx(t->state);
 	kputs("\n");
-};
+}
 
 void print_tasks() {
 	if (current_task == NULL) {

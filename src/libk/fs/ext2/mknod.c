@@ -15,7 +15,7 @@ size_t ext2_mknod(struct file_system *fs, size_t parent_inode, char *file_name, 
 	struct ext2_inode *parent = kmalloc(sizeof(*parent));
 	ext2_load_inode(fs, parent, parent_inode);
 
-	void *buf = kmalloc(e2fs->block_size);
+	uint8_t *buf = kmalloc(e2fs->block_size);
 	size_t block = 0;
 	size_t block_addr;
 	struct ext2_dir_entry *entry;
@@ -24,14 +24,13 @@ size_t ext2_mknod(struct file_system *fs, size_t parent_inode, char *file_name, 
 		if (ext2_load_blocks(fs, buf, block_addr, 1)) {
 			kfree(buf);
 			kfree(parent);
-			/* TODO: ADD CODE TO FREE THE ALLOCATED INODE. */
 			return 0;
 
 		};
 
 		size_t i = 0;
 		while (1) {
-			entry = buf + i;
+			entry = (void *)(buf + i);
 			if (entry->size == 0) {
 				goto success;
 			}
@@ -54,7 +53,7 @@ success:
 	inode->type_perm = type_perm;
 
 	/* GCC gives a warning if we pass the pointer directly. */
-	uint32_t *bptr = ((void *)inode) + offsetof(struct ext2_inode,direct_block);
+	uint32_t *bptr = (uint32_t *)((uint8_t *)inode) + offsetof(struct ext2_inode,direct_block);
 	ext2_alloc_blocks(fs, 1, bptr);
 
 	inode->uid = uid;
@@ -85,8 +84,4 @@ success:
 	}
 	kfree(buf);
 	return GENERIC_SUCCESS;
-};
-
-
-
-
+}

@@ -6,7 +6,7 @@
 #include <mem.h>
 
 
-memory_map_t physical_memory = {};
+memory_map_t physical_memory;
 
 memory_map_t *getPhysicalMem() {
 	return &physical_memory;
@@ -53,7 +53,7 @@ uint8_t isppUsed(uint64_t page) {
 	uint64_t byte = physical_memory.bitmap[page/64];
 
 	/* Get the value of the corresponding bit. */
-	uint64_t bit = (byte >> (page % 64)) & 0b1;
+	uint64_t bit = (byte >> (page % 64)) & 1;
 
 
 	return (uint8_t)(bit);
@@ -81,15 +81,14 @@ uint8_t setppUsed(uint64_t page, uint8_t value) {
 		 * This sets it to zero by xor'ing all 1's with the bit, which is then AND'ed
 		 * with byte to set it to zero.
 		 */
-		byte = byte & (0xFFFFFFFFFFFFFFFF ^ (1 << bit));
+		byte = byte & (0xFFFFFFFFFFFFFFFF ^ ((uint64_t)1 << bit));
 
 	} else {
-		byte = byte | (1 << bit);
+		byte = byte | ((uint64_t)1 << bit);
 	}
 
 	/* Now write the byte back into the bitmap. */
 	physical_memory.bitmap[page/64] = byte;
-
 
 	return GENERIC_SUCCESS;
 }
@@ -119,8 +118,6 @@ uint64_t allocpps(uint64_t amount) {
 	 * This function is like allocpp(), except it allocates multiple, *continous* physical
 	 * pages. It doesn't loop over allocpp() because that would be very inefficient.
 	 */
-
-
 
 	uint64_t ia = 0;
 	for (uint64_t i = 0; i < (sizeof(physical_memory.bitmap))*8; i++) {
@@ -179,10 +176,7 @@ uint8_t init_pmm(struct stivale2_struct_tag_memmap *memtag) {
 		return 1;
 	}
 
-	/*
-	 * This is technically undefined behaviour if we don't set it, so we initialise it here
-	 * with a zero.
-	 */
+
 	physical_memory.num_blocks = 0;
 
 	/* Extract the necessary info from the memory map provided by the bootloader. */

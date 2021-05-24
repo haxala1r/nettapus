@@ -46,5 +46,4 @@ int32_t pipeu(struct task *t, int32_t ret[]) {
 	pipe_vnode->pipe_mem = kmalloc(DEFAULT_PIPE_SIZE);
 
 	return GENERIC_SUCCESS;
-};
-
+}

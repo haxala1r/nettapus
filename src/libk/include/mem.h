@@ -110,7 +110,7 @@ struct chunk_header {
 	/* Right here is where the data section of the chunk goes.
 	 * You can simply do a "ptr + 1" to get to the data section.
 	 */
-} __attribute__((packed));
+};
 
 
 

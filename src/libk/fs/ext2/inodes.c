@@ -15,7 +15,7 @@ size_t ext2_block_in_inode(struct ext2_inode *node, size_t n) {
 	}
 	/* TODO: handle indirect blocks. */
 	return 0;
-};
+}
 
 
 size_t ext2_load_inode(struct file_system *fs, struct ext2_inode *dest, size_t inode_num) {
@@ -49,7 +49,7 @@ size_t ext2_load_inode(struct file_system *fs, struct ext2_inode *dest, size_t i
 	kfree(buf);
 
 	return GENERIC_SUCCESS;
-};
+}
 
 size_t ext2_write_inode(struct file_system *fs, struct ext2_inode *inode, size_t inode_num) {
 	if (fs == NULL)          { return ERR_INVALID_PARAM; }
@@ -71,7 +71,7 @@ size_t ext2_write_inode(struct file_system *fs, struct ext2_inode *inode, size_t
 	}
 
 	block += gdes.inode_table_addr;
-	void *buf = kmalloc(e2fs->block_size);
+	uint8_t *buf = kmalloc(e2fs->block_size);
 
 	/* Load the specified block of the inode table. */
 	if (ext2_load_blocks(fs, buf, block, 1)) {
@@ -89,8 +89,7 @@ size_t ext2_write_inode(struct file_system *fs, struct ext2_inode *inode, size_t
 
 	kfree(buf);
 	return GENERIC_SUCCESS;
-};
-
+}
 
 
 size_t ext2_alloc_inode(struct file_system *fs) {
@@ -130,12 +129,10 @@ size_t ext2_alloc_inode(struct file_system *fs) {
 				return i * e2fs->sb->inodes_in_group + j;
 			}
 		}
-		ext2_write_blocks(fs, buf, gdes.inode_bitmap_addr, to_read);
 	}
 	kfree(buf);
 	return 0;
-};
-
+}
 
 
 int64_t ext2_get_size(struct file_system *fs, size_t inode_num) {
@@ -150,7 +147,7 @@ int64_t ext2_get_size(struct file_system *fs, size_t inode_num) {
 
 	size_t file_size = ((size_t)inode.size_high << 32) | (inode.size_low);
 	return file_size;
-};
+}
 
 int64_t ext2_get_links(struct file_system *fs, size_t inode_num) {
 	if (fs == NULL)          { return -ERR_INVALID_PARAM; }
@@ -163,7 +160,7 @@ int64_t ext2_get_links(struct file_system *fs, size_t inode_num) {
 	}
 
 	return inode.hard_links;
-};
+}
 
 uint16_t ext2_get_type_perm(struct file_system *fs, size_t inode_num) {
 	if (fs == NULL) { return 0xFFFF; }
@@ -176,6 +173,6 @@ uint16_t ext2_get_type_perm(struct file_system *fs, size_t inode_num) {
 	}
 
 	return inode.type_perm;
-};
+}
 
 

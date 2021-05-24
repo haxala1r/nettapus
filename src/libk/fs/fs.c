@@ -10,8 +10,11 @@
 #include <fs/ext2.h>
 
 
-
-const struct fs_driver ext2_driver = {
+/* This is a list of all FS drivers in the system. These will (hopefully) be
+ * loaded at run-time in the future, in form of kernel modules.
+ */
+struct fs_driver fs_drivers[16] = {
+	{  /* EXT2 */
 	.init_fs     = ext2_init_fs,
 	.check_drive = ext2_check_drive,
 
@@ -31,24 +34,18 @@ const struct fs_driver ext2_driver = {
 	.mknod       = ext2_mknod,
 
 	.type        = FS_EXT2
-};
-
-/* This is a list of all FS drivers in the system. These will (hopefully) be
- * loaded at run-time in the future, in form of kernel modules.
- */
-struct fs_driver fs_drivers[16] = {
-	ext2_driver
+	}
 };
 
 /* Will be incremented every time a driver is added. */
 size_t fs_drivers_count = 1;
 
-
+struct file_system *first_fs = NULL;
 struct file_system *root_fs = NULL;
 
 struct file_system *fs_get_root() {
 	return root_fs;
-};
+}
 
 size_t fs_set_root(struct file_system *fs) {
 	/* This is a convenience function that sets the root_fs variable and mounts
@@ -57,7 +54,11 @@ size_t fs_set_root(struct file_system *fs) {
 	if (fs == NULL) { return ERR_INVALID_PARAM; }
 	root_fs = fs;
 	return init_vfs(fs);
-};
+}
+
+struct file_system *fs_get_first() {
+	return first_fs;
+}
 
 
 size_t fs_check_drive(struct drive *d) {
@@ -79,7 +80,7 @@ size_t fs_check_drive(struct drive *d) {
 	}
 
 	return 0;
-};
+}
 
 
 uint8_t register_fs(struct drive *d) {
@@ -116,8 +117,8 @@ uint8_t register_fs(struct drive *d) {
 	}
 
 	/* Otherwise, add the new file system to the list. */
-	new_fs->next = root_fs;
-	root_fs = new_fs;
+	new_fs->next = first_fs;
+	first_fs = new_fs;
 
 
 	/* Load and create the root node for the file system. */
@@ -133,6 +134,10 @@ uint8_t register_fs(struct drive *d) {
 	new_fs->root_node->vnode->mounted = 0;
 	new_fs->root_node->vnode->mount_point = NULL;
 	new_fs->root_node->vnode->mutex = create_semaphore(1);
+	new_fs->root_node->vnode->type_perm = new_fs->driver->get_type_perm(new_fs, new_fs->root_node->vnode->inode_num);
+	new_fs->root_node->vnode->link_count = new_fs->driver->get_links(new_fs, new_fs->root_node->vnode->inode_num);
+	new_fs->root_node->vnode->cached_links = 1;
+	/* Also get uids and stuff here.*/
 
 	if (vfs_dir_load_list(new_fs->root_node->vnode)) {
 		kfree(new_fs->root_node->vnode->mutex);
@@ -141,7 +146,7 @@ uint8_t register_fs(struct drive *d) {
 	}
 
 	return GENERIC_SUCCESS;
-};
+}
 
 
 size_t init_fs(void) {
@@ -172,33 +177,28 @@ size_t init_fs(void) {
 	}
 
 	if (found_fs) {
-		init_vfs(root_fs);
+		fs_set_root(first_fs);
 	}
 
 	return found_fs;
 }
 
-
 #ifdef DEBUG
-#include <tty.h>
+void root_list() {
+	/* Outputs to Serial. */
+	serial_puts("\r\n/: \r\n");
+	struct file_system *i = root_fs;
 
-void fs_print_state(void) {
-	kputs("\nFS STATES \n{fs_type}: {starting_lba} {sector count}\n");
-	struct file_system *fs = root_fs;
-
-	while (fs) {
-		kputx(fs->fs_type);
-		kputs(": ");
-
-		kputx(fs->starting_sector);
-		kputs(" ");
-
-		kputx(fs->sector_count);
-		kputs("\n");
-
-		fs = fs->next;
+	while (i != NULL) {
+		struct folder_tnode *fnode = i->root_node->vnode->subfolders;
+		while (fnode != NULL) {
+			serial_puts(fnode->folder_name);
+			serial_puts(" ");
+			fnode = fnode->next;
+		}
+		i = i->next;
 	}
-};
-
+	serial_puts("\r\n");
+}
 
 #endif

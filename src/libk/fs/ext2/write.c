@@ -9,7 +9,7 @@
 
 int64_t ext2_write_file(struct file_system *fs, size_t inode, void *dest_buf, size_t off, size_t bytes) {
 	if (fs == NULL)       { return -ERR_INVALID_PARAM; }
-	if (inode < 2)       { return -ERR_INVALID_PARAM; }
+	if (inode < 2)        { return -ERR_INVALID_PARAM; }
 	if (dest_buf == NULL) { return -ERR_INVALID_PARAM; }
 
 	struct ext2_fs *e2fs = fs->special;
@@ -25,7 +25,7 @@ int64_t ext2_write_file(struct file_system *fs, size_t inode, void *dest_buf, si
 	}
 
 	/* Get the buffer ready.*/
-	void *data_buf = kmalloc(e2fs->block_size);
+	uint8_t *data_buf = kmalloc(e2fs->block_size);
 	if (data_buf == NULL) { return -ERR_OUT_OF_MEM; }
 
 	size_t block = off / e2fs->block_size;
@@ -60,7 +60,7 @@ int64_t ext2_write_file(struct file_system *fs, size_t inode, void *dest_buf, si
 
 		/* Continue. */
 		bytes -= to_copy;
-		dest_buf += to_copy;
+		dest_buf = (uint8_t *)dest_buf + to_copy;
 		bytes_read += to_copy;
 		off = 0;
 		block++;
@@ -68,4 +68,4 @@ int64_t ext2_write_file(struct file_system *fs, size_t inode, void *dest_buf, si
 
 	kfree(data_buf);
 	return bytes_read;
-};
+}

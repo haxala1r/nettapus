@@ -209,7 +209,7 @@ struct file_descriptor {
 
 struct file_system *fs_get_root();
 size_t fs_set_root(struct file_system *fs);
-
+struct file_system *fs_get_first();
 
 
 size_t fs_check_drive(struct drive *d);
@@ -252,6 +252,8 @@ size_t init_fs(void);
 
 #ifdef DEBUG
 void fs_print_state(void);
+void root_list();
+void vfs_print_nodes();
 #endif
 
 

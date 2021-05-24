@@ -48,11 +48,11 @@ int64_t ext2_read_file(struct file_system *fs, size_t inode, void *dest_buf, siz
 		/* Copy the data from the block. */
 		size_t to_copy = e2fs->block_size - off;
 		to_copy = (to_copy > bytes) ? bytes : to_copy;
-		memcpy(dest_buf, data_buf + off, to_copy);
+		memcpy(dest_buf, (uint8_t *)data_buf + off, to_copy);
 
 		/* Continue. */
 		bytes -= to_copy;
-		dest_buf += to_copy;
+		dest_buf = (uint8_t *)dest_buf + to_copy;
 		bytes_read += to_copy;
 		off = 0;
 		block++;
@@ -60,6 +60,4 @@ int64_t ext2_read_file(struct file_system *fs, size_t inode, void *dest_buf, siz
 
 	kfree(data_buf);
 	return bytes_read;
-};
-
-
+}

@@ -39,6 +39,15 @@ make a new partition (on an IDE drive) and burn the ext2.img image file to that
 partition (you could also copy all files in the root directory to the newly created
 partition if you want a different size).
 
+USB support will be added later on in development.
+
+# Cool facts
+
+Nettapus compiles perfectly with all optimizations supported by GCC. It also
+compiles & runs without issue when compiled with `-fsanitize=undefined` (all
+sanitizers are set to panic()), so you can rest assured that there are no major
+UBs.
+
 # Contributions
 See CONTRIBUTING.md
 

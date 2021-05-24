@@ -11,7 +11,7 @@ int64_t vfs_write_file(struct file_descriptor *fdes, void *buf, int64_t amount) 
 	struct file_vnode *node = fdes->node;
 	acquire_semaphore(node->mutex);
 
-	/* Determine the exact amount we can write. */
+	/* Determine the exact amount we can write. TODO: enlarge file. */
 	int64_t to_write = amount;
 	if ((to_write + fdes->pos) > node->size) {
 		to_write = node->size - fdes->pos;
@@ -25,8 +25,7 @@ int64_t vfs_write_file(struct file_descriptor *fdes, void *buf, int64_t amount) 
 		fdes->pos += stat;
 	}
 	return stat;
-};
-
+}
 
 
 int64_t vfs_write_pipe(struct file_descriptor *fdes, void *buf, int64_t amount) {
@@ -56,18 +55,18 @@ int64_t vfs_write_pipe(struct file_descriptor *fdes, void *buf, int64_t amount) 
 		}
 
 		/* Copy the data from the buffer to the pipe. */
-		memcpy(node->pipe_mem + node->size, buf, to_write);
+		memcpy((uint8_t *)node->pipe_mem + node->size, buf, to_write);
 
 		amount -= to_write;
 		node->size += to_write;
-		buf += to_write;
+		buf = (uint8_t *)buf + to_write;
 		ret += to_write;
 	}
 
 	signal_queue(node->read_queue);
 	release_semaphore(node->mutex);
 	return ret;
-};
+}
 
 int64_t kwrite(int32_t fd, void *buf, int64_t amount) {
 	if (buf == NULL) { return -ERR_INVALID_PARAM; }
@@ -81,4 +80,4 @@ int64_t kwrite(int32_t fd, void *buf, int64_t amount) {
 	if (fnode == NULL) { return -ERR_INVALID_PARAM; }
 
 	return fnode->write(fdes, buf, amount);
-};
+}

@@ -17,9 +17,7 @@ int32_t vfs_open_file(struct file_vnode *node, struct task *t, size_t mode) {
 
 	release_semaphore(node->mutex);
 	return fdes->fd;
-};
-
-
+}
 
 
 int32_t kopen(char *path, size_t mode) {
@@ -43,4 +41,4 @@ int32_t kopen(char *path, size_t mode) {
 		return -1;
 	}
 	return node->open(node, get_current_task(), mode);
-};
+}

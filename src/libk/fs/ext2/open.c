@@ -18,7 +18,7 @@ struct ext2_dir_entry *ext2_search_dir(struct file_system *fs, struct ext2_inode
 	struct ext2_fs *e2fs = fs->special;
 
 	/* We'll iterate through every block of the directory. */
-	void *dir = kmalloc(e2fs->block_size);
+	uint8_t *dir = kmalloc(e2fs->block_size);
 	struct ext2_dir_entry *entry;
 	struct ext2_dir_entry *ret;
 	size_t block = 0; /* Current block within the directory. */
@@ -34,15 +34,18 @@ struct ext2_dir_entry *ext2_search_dir(struct file_system *fs, struct ext2_inode
 			goto fail;
 		}
 
-		entry = dir;
 		size_t i = 0;
 		while (1) {
-			entry = dir + i;
+			entry = (void*)(dir + i);
 			if (entry->size > e2fs->block_size) {
 				goto fail;
 			}
 
-			if (!strcmp(&entry->nm, file_name)) {
+			char buf[entry->name_len + 1];
+			memcpy(buf, &entry->nm, entry->name_len);
+			buf[entry->name_len] = '\0';
+
+			if (!strcmp(buf, file_name)) {
 				goto success;
 			}
 
@@ -64,7 +67,7 @@ success:
 	memcpy(ret, entry, sizeof(*ret));
 	kfree(dir);
 	return ret;
-};
+}
 
 
 
@@ -114,11 +117,8 @@ size_t ext2_open_at(struct file_system *fs, size_t folder_inode, char *full_path
 
 	kfree(node);
 	return inode_num;
-};
+}
 
 size_t ext2_open(struct file_system *fs, char *full_path) {
 	return ext2_open_at(fs, 2, full_path);
-};
-
-
-
+}

@@ -4,7 +4,7 @@
 #include <err.h>
 #include <mem.h>
 
-struct folder_tnode *root_tnode;
+struct folder_tnode *root_tnode = NULL;
 
 /* Searches a Directory for a Directory/File. Remember, when a folder vnode is
  * loaded into memory, t-nodes of all of its children are loaded along with
@@ -12,7 +12,9 @@ struct folder_tnode *root_tnode;
  * loaded, it already has a folder listing loaded as well.
  */
 struct folder_tnode *vfs_search_dd(struct folder_vnode *node, char *name) {
-
+	if (node == NULL) {
+		return NULL;
+	}
 	if (node->mounted){
 		node = node->mount_point->vnode;
 	}
@@ -25,13 +27,14 @@ struct folder_tnode *vfs_search_dd(struct folder_vnode *node, char *name) {
 		}
 
 		i = i->next;
-	};
+	}
 
 	release_semaphore(node->mutex);
 	return i;
-};
+}
 
 struct file_tnode *vfs_search_df(struct folder_vnode *node, char *name) {
+	if (node == NULL) { return NULL; }
 	if (node->mounted){
 		node = node->mount_point->vnode;
 	}
@@ -44,13 +47,11 @@ struct file_tnode *vfs_search_df(struct folder_vnode *node, char *name) {
 		}
 
 		i = i->next;
-	};
+	}
 
 	release_semaphore(node->mutex);
 	return i;
-};
-
-
+}
 
 /* Load/free the list of a folder's children. */
 void free_dir_list(struct folder_vnode *vnode) {
@@ -86,7 +87,7 @@ void free_dir_list(struct folder_vnode *vnode) {
 		vnode->subfiles = NULL;
 		vnode->subfile_count = 0;
 	}
-};
+}
 
 size_t vfs_dir_load_list(struct folder_vnode *vnode) {
 	if (vnode == NULL) { return ERR_INVALID_PARAM; }
@@ -100,8 +101,7 @@ size_t vfs_dir_load_list(struct folder_vnode *vnode) {
 
 	release_semaphore(vnode->mutex);
 	return GENERIC_SUCCESS;
-};
-
+}
 
 
 /* These functions are called when the child of a folder exists, but hasn't
@@ -160,7 +160,7 @@ struct folder_vnode *vfs_load_folder_at(struct folder_vnode *parent, struct fold
 	}
 
 	return tnode->vnode;
-};
+}
 
 struct file_vnode *vfs_load_file_at(struct folder_vnode *parent, struct file_tnode *tnode) {
 	if (parent == NULL) { return NULL; }
@@ -200,9 +200,9 @@ struct file_vnode *vfs_load_file_at(struct folder_vnode *parent, struct file_tno
 	tnode->vnode->cached_links = 1;
 
 	tnode->vnode->open = vfs_open_file;
-	tnode->vnode->read = (void*)vfs_read_file;
-	tnode->vnode->write = NULL;
-	tnode->vnode->close = (void*)vfs_close_file;
+	tnode->vnode->read = vfs_read_file;
+	tnode->vnode->write = vfs_write_file;
+	tnode->vnode->close = vfs_close_file;
 
 	/* The mutex and the queues. */
 	tnode->vnode->mutex = create_semaphore(1);
@@ -212,14 +212,15 @@ struct file_vnode *vfs_load_file_at(struct folder_vnode *parent, struct file_tno
 	memset(tnode->vnode->write_queue, 0, sizeof(QUEUE));
 
 	return tnode->vnode;
-};
-
+}
 
 
 struct file_vnode *vfs_search_file_vnode(char *path) {
 	/* This function loads/finds a file vnode. If it doesn't find one of the nodes
 	 * in the path cached, it will load them. If one of the nodes in the path
-	 * just doesn't exist, it returns NULL.*/
+	 * just doesn't exist, it returns NULL.
+	 */
+	if (root_tnode == NULL) { return NULL; } /* The vfs hasn't been initialised yet. */
 	char **arr = fs_parse_path(path);
 	struct folder_tnode *cur_dir = root_tnode;
 	if (root_tnode->vnode->mounted) {
@@ -228,7 +229,7 @@ struct file_vnode *vfs_search_file_vnode(char *path) {
 	struct folder_tnode *par_dir = cur_dir; /* Parent of cur_dir*/
 	size_t depth = 0;
 
-	if (arr[0] == NULL) {
+	if ((arr[0] == NULL) || (cur_dir == NULL)) {
 		fs_free_path(arr);
 		return NULL;
 	}
@@ -252,7 +253,7 @@ struct file_vnode *vfs_search_file_vnode(char *path) {
 
 		depth++;
 		par_dir = cur_dir;
-	};
+	}
 
 	struct file_tnode *ret = vfs_search_df(cur_dir->vnode, arr[depth]);
 	if (ret == NULL) {
@@ -266,7 +267,7 @@ struct file_vnode *vfs_search_file_vnode(char *path) {
 	}
 	fs_free_path(arr);
 	return ret->vnode;
-};
+}
 
 size_t vfs_unload_fnode(struct file_vnode *f) {
 	if (f == NULL) { return ERR_INVALID_PARAM; }
@@ -282,7 +283,7 @@ size_t vfs_unload_fnode(struct file_vnode *f) {
 	kfree(f);
 
 	return GENERIC_SUCCESS;
-};
+}
 
 size_t vfs_unload_dnode(struct folder_vnode *f) {
 	if (f == NULL) { return ERR_INVALID_PARAM; }
@@ -292,7 +293,7 @@ size_t vfs_unload_dnode(struct folder_vnode *f) {
 	kfree(f);
 
 	return GENERIC_SUCCESS;
-};
+}
 
 struct file_vnode *mknode_file(char *path) {
 	/* Firstly, we need to go through the path because we need the vnode of the
@@ -329,7 +330,7 @@ struct file_vnode *mknode_file(char *path) {
 
 		depth++;
 		par_dir = cur_dir;
-	};
+	}
 
 	/* Check if the file already exists. */
 	struct file_tnode *ret = vfs_search_df(par_dir->vnode, arr[depth]);
@@ -361,14 +362,14 @@ struct file_vnode *mknode_file(char *path) {
 	ret->vnode->inode_num = ret->vnode->fs->driver->mknod(ret->vnode->fs, par_dir->vnode->inode_num, ret->file_name, 0, 0, 0);
 
 	ret->vnode->open = vfs_open_file;
-	ret->vnode->close = (void *)vfs_close_file;
-	ret->vnode->read = (void *)vfs_read_file;
-	ret->vnode->write = NULL;//vfs_write_file;
+	ret->vnode->close = vfs_close_file;
+	ret->vnode->read = vfs_read_file;
+	ret->vnode->write = vfs_write_file;
 
 	vfs_dir_load_list(par_dir->vnode);
 
 	return ret->vnode;
-};
+}
 
 
 size_t vfs_mount_fs(struct file_system *fs, struct folder_vnode *node) {
@@ -381,8 +382,7 @@ size_t vfs_mount_fs(struct file_system *fs, struct folder_vnode *node) {
 	node->mount_point = fs->root_node;
 	release_semaphore(node->mutex);
 	return GENERIC_SUCCESS;
-};
-
+}
 
 
 size_t init_vfs(struct file_system *root) {
@@ -402,9 +402,17 @@ size_t init_vfs(struct file_system *root) {
 	root_tnode->vnode->mutex = create_semaphore(1);
 
 	return vfs_mount_fs(root, root_tnode->vnode);
-};
+}
 
 
 
-
-
+#ifdef DEBUG
+#include <tty.h>
+void vfs_print_nodes() {
+	struct folder_tnode *fi = root_tnode->vnode->subfolders;
+	while (fi) {
+		kputs(fi->folder_name);
+		kputs("\n");
+	}
+}
+#endif

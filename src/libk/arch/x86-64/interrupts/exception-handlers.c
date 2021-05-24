@@ -1,6 +1,6 @@
 
 #include <interrupts.h>
-#include <tty.h>
+#include <err.h>
 #include <vga.h>
 
 void kpanic() {
@@ -11,8 +11,8 @@ void kpanic() {
 	 */
 	__asm__ volatile ("cli;");
 	vga_fill_screen(0x00FF0000);
-
+	serial_puts("\r\nPANIC!\r\n at the disco");
 	while (1) {
 		__asm__ volatile ("hlt;");
-	};
-};
+	}
+}

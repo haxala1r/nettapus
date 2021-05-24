@@ -45,7 +45,7 @@ struct drive {
 	/* Indicates what resides on this drive. Maybe a MBR, a GPT, an ext2 filesystem
 	 * etc. etc.
 	 */
-	uint8_t type;
+	size_t type;
 
 	struct drive *next;
 };

@@ -40,8 +40,7 @@ uint8_t ext2_init_fs(struct file_system *fs) {
 
 	fs->special = e2fs;
 	return GENERIC_SUCCESS;
-};
-
+}
 
 uint8_t ext2_check_drive(struct drive *d) {
 	if (d == NULL) { return ERR_INVALID_PARAM; }
@@ -60,5 +59,4 @@ uint8_t ext2_check_drive(struct drive *d) {
 
 	kfree(sb);
 	return GENERIC_SUCCESS;
-};
-
+}

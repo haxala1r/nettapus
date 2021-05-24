@@ -3,18 +3,18 @@
 #include <disk/ide.h>
 #include <pci.h>
 #include <mem.h>
+#include <err.h>
 
 
-ide_drive_t* ide_first_drive;
-ide_bus_t* ide_first_bus;
+ide_drive_t *ide_first_drive;
+ide_bus_t *ide_first_bus;
 
-ide_drive_t* ide_get_first_drive() {
+ide_drive_t *ide_get_first_drive() {
 	return ide_first_drive;
-};
-
-ide_bus_t* ide_get_first_bus() {
+}
+ide_bus_t *ide_get_first_bus() {
 	return ide_first_bus;
-};
+}
 
 
 //functions to do stuff.
@@ -31,7 +31,7 @@ ide_drive_t* ide_find_drive(uint16_t drive_id) {
 		i = i->next;
 	}
 	return NULL;
-};
+}
 
 
 
@@ -94,15 +94,13 @@ uint8_t ide_identify_noid(uint16_t io_base, uint8_t slave, uint16_t* buf) {
 		}
 	}
 	return 0;
-};
+}
 
 
 void ide_register_disk(uint16_t id, uint16_t io, uint16_t control, uint8_t slave, uint32_t max_lba28, uint64_t max_lba48) {
-
 	/*
 	 * this adds a disk to the list, and if that disk already exists, refreshes its data.
 	 */
-
 
 	ide_drive_t* ndrive = kmalloc(sizeof(ide_drive_t));
 	ndrive->drive_id = id;
@@ -145,10 +143,10 @@ void ide_register_disk(uint16_t id, uint16_t io, uint16_t control, uint8_t slave
 
 	//disable interrupts.
 	outb(ndrive->io_port_base + 6, 0xA0 | (ndrive->slave << 4));
-	outb(ndrive->control_port_base, 0b10);
+	outb(ndrive->control_port_base, 2); /* 0b10 */
 
 	return;		//we're done here.
-};
+}
 
 
 void ide_refresh_disks() {
@@ -182,46 +180,37 @@ void ide_refresh_disks() {
 			break;
 		}
 
-		uint8_t stat = inb(ibus->io_base);
-		if ((stat == 0xFF) && (stat == 0x7F)) {
-			continue;	//there are no drives on this bus.
+		uint8_t stat = inb(ibus->io_base + 7);
+		if ((stat != 0xFF) && (stat != 0x7F)) {
+			/* Sorry for the long lines.
+			 * The lengthy parts are the shifts necessary to assemble the maximum lba28 and lba48
+			 * (respectively) addressable sectors.
+			 */
+			//check and register drives.
+			if (!ide_identify_noid(ibus->io_base, 0, buf)) {
+				ide_register_disk(i * 4, ibus->io_base, ibus->control_base, 0, buf[60] | (buf[61] << 16), (buf[100]) | (buf[101] << 16) | ((uint64_t)buf[102] << 32) | ((uint64_t)buf[103] << 48));
+			}
+			if (!ide_identify_noid(ibus->io_base, 1, buf)) {
+				ide_register_disk(i * 4 + 1, ibus->io_base, ibus->control_base, 1, buf[60] | (buf[61] << 16), (buf[100]) | (buf[101] << 16) | ((uint64_t)buf[102] << 32) | ((uint64_t)buf[103] << 48 ));
+			}
 		}
 
-		/* Sorry for the long lines. The compiler wouldn't let me divide these into different
-		 * lines via variables (it randomly crashed when I attempted that.)
-		 * The lengthy parts are the shifts necessary to assemble the maximum lba28 and lba48
-		 * (respectively) addressable sectors.
-		 */
-
-		//check and register drives.
-		if (!ide_identify_noid(ibus->io_base, 0, buf)) {
-			ide_register_disk(i * 4, ibus->io_base, ibus->control_base, 0, buf[60] | (buf[61] << 16), (buf[100]) | (buf[101] << 16) | ((uint64_t)buf[102] << 32) | ((uint64_t)buf[103] << 48));
+		stat = inb(ibus->secondary_io_base + 7);
+		if ((stat != 0xFF) && (stat != 0x7F)) {
+			//check and register drives.
+			if (!ide_identify_noid(ibus->secondary_io_base, 0, buf)) {
+				ide_register_disk(i * 4 + 2, ibus->secondary_io_base, ibus->secondary_control_base, 0, buf[60] | (buf[61] << 16), (buf[100]) | (buf[101] << 16) | ((uint64_t)buf[102] << 32) | ((uint64_t)buf[103] << 48 ));
+			}
+			if (!ide_identify_noid(ibus->secondary_io_base, 1, buf)) {
+				ide_register_disk(i * 4 + 3, ibus->secondary_io_base, ibus->secondary_control_base, 1, buf[60] | (buf[61] << 16), (buf[100]) | (buf[101] << 16) | ((uint64_t)buf[102] << 32) | ((uint64_t)buf[103] << 48 ));
+			}
 		}
-		if (!ide_identify_noid(ibus->io_base, 1, buf)) {
-			ide_register_disk(i * 4 + 1, ibus->io_base, ibus->control_base, 1, buf[60] | (buf[61] << 16), (buf[100]) | (buf[101] << 16) | ((uint64_t)buf[102] << 32) | ((uint64_t)buf[103] << 48 ));
-		}
-
-
-		stat = inb(ibus->secondary_io_base);
-		if ((stat == 0xFF) && (stat == 0x7F)) {
-			continue;	//there are no drives on this bus.
-		}
-
-		//check and register drives.
-		if (!ide_identify_noid(ibus->secondary_io_base, 0, buf)) {
-			ide_register_disk(i * 4 + 2, ibus->secondary_io_base, ibus->secondary_control_base, 0, buf[60] | (buf[61] << 16), (buf[100]) | (buf[101] << 16) | ((uint64_t)buf[102] << 32) | ((uint64_t)buf[103] << 48 ));
-		}
-		if (!ide_identify_noid(ibus->secondary_io_base, 1, buf)) {
-			ide_register_disk(i * 4 + 3, ibus->secondary_io_base, ibus->secondary_control_base, 1, buf[60] | (buf[61] << 16), (buf[100]) | (buf[101] << 16) | ((uint64_t)buf[102] << 32) | ((uint64_t)buf[103] << 48 ));
-		}
-
 
 		i++;
 		ibus = ibus->next;
 	}
 	kfree(buf);
 }
-
 
 void ide_register_bus(pci_device_t* bus) {
 	//remember, a bus is added regardless of whether it has devices connected
@@ -274,8 +263,6 @@ void ide_register_bus(pci_device_t* bus) {
 	}
 
 
-
-
 	nbus->next = NULL;
 	//now we should add this to the linked list
 
@@ -294,7 +281,7 @@ void ide_register_bus(pci_device_t* bus) {
 		}
 		i = i->next;
 	}
-};
+}
 
 
 uint8_t init_ide() {
@@ -325,17 +312,11 @@ uint8_t init_ide() {
 		return 2;
 	}
 	return 0;
-};
-
-
-
-
-
+}
 
 
 #ifdef DEBUG
 #include <tty.h>
-
 void ide_print_state() {
 	kputs("\nIDE STATE\n {drive id}: {io base} {control base} {lba28 sectors} {lba48 sectors}\n");
 	ide_drive_t *di = ide_first_drive;
@@ -356,12 +337,5 @@ void ide_print_state() {
 
 		di = di->next;
 	}
-};
-
-
+}
 #endif
-
-
-
-
-

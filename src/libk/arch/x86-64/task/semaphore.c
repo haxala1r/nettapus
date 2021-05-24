@@ -6,7 +6,7 @@
 SEMAPHORE *create_semaphore(int32_t max_count) {
 	SEMAPHORE *s = kmalloc(sizeof(SEMAPHORE));
 
-	if (s == NULL) { return NULL; };
+	if (s == NULL) { return NULL; }
 
 	memset(s, 0, sizeof(*s));
 
@@ -16,13 +16,13 @@ SEMAPHORE *create_semaphore(int32_t max_count) {
 	s->last_waiting_task	= NULL;
 
 	return s;
-};
+}
 
 
 /* TODO: When SMP support is added, these should be guarded by a spinlock. */
 
 void acquire_semaphore(SEMAPHORE *s) {
-
+	if (s == NULL) { return; }
 	/* This is where the spinlock would go, but we don't have
 	 * SMP, so this works well enough.
 	 */
@@ -64,12 +64,12 @@ void acquire_semaphore(SEMAPHORE *s) {
 	unlock_task_switches();
 
 	return;
-};
+}
 
 
 
 void release_semaphore(SEMAPHORE *s) {
-
+	if (s == NULL) { return; }
 	/* This is where the spinlock would go, but we don't have
 	 * SMP, so this works well enough.
 	 */
@@ -92,7 +92,7 @@ void release_semaphore(SEMAPHORE *s) {
 	unlock_task_switches();
 
 	return;
-};
+}
 
 
 
@@ -109,5 +109,5 @@ void destroy_semaphore(SEMAPHORE *s) {
 	lock_scheduler();
 
 	kfree(s);
-};
+}
 

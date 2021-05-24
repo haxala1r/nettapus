@@ -88,8 +88,8 @@ chunk_header_t *divideChunk(uint64_t size, chunk_header_t* chunk) {
 		 */
 		size += 1;
 	}
-	if (chunk->size <= (size + sizeof(chunk_header_t))) {
-		/* This makes sure that there is enough space to actually split. */
+	if (chunk->size <= (size + sizeof(chunk_header_t) + 7)) {
+		/* This makes sure that there is enough space to actually split & align. */
 		return NULL;
 	}
 
@@ -98,9 +98,12 @@ chunk_header_t *divideChunk(uint64_t size, chunk_header_t* chunk) {
 	chunk_header_t *c1 = chunk;
 	chunk_header_t *c2;
 
-
-	c2 = (chunk_header_t*)(((uintptr_t)chunk) + size + sizeof(chunk_header_t));
-
+	uintptr_t c2_addr = ((uintptr_t)chunk) + size + sizeof(chunk_header_t);
+	if (c2_addr % 8) {
+		/* Always have it 16-bytes aligned. */
+		c2_addr += 8 - (c2_addr % 8);
+	}
+	c2 = (chunk_header_t *) c2_addr;
 
 	c2->size = chunk->size - (size + sizeof(chunk_header_t));
 	if (chunk->next != NULL) {
@@ -187,7 +190,7 @@ void *kmalloc(uint64_t bytes) {
 			 * I should probably change this to a more clever algorithm,
 			 * but for now this should suffice.
 			 */
-			if ((chunk->size - bytes) > 32) {
+			if ((chunk->size - bytes) > 48) {
 				/* if difference >= 32, chop the chunk to be as big as requested,
 				 * then return it.
 				 */
@@ -359,7 +362,7 @@ void heap_print_state(void) {
 		i = i->next;
 	}
 
-};
+}
 
 #endif /* DEBUG*/
 

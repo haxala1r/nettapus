@@ -2,7 +2,7 @@
 #define ERR_H 1
 
 #include <stdint.h>
-
+#include <stddef.h>
 
 /* This file just defines some error codes.
  *
@@ -46,7 +46,11 @@
 #define ERR_DISK                5
 #define ERR_OUT_OF_BOUNDS       6
 #define ERR_OUT_OF_MEM          7
+#define ERR_EOF                 8
 
+size_t init_serial();
+void serial_puts(char *);
+void serial_putx(uint64_t val);
 int64_t print_stat(int64_t stat);
 
 

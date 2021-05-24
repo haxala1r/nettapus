@@ -17,9 +17,9 @@ struct PS_font {
 	uint32_t flags;
 	uint32_t glyph_count;
 	uint32_t glyph_size;	/* In bytes. */
-	
+
 	/* In pixels.*/
-	uint32_t height;		
+	uint32_t height;
 	uint32_t width;
 } __attribute__((packed));
 
@@ -28,7 +28,7 @@ void kputs(char*);
 void kputs_color(char*, uint32_t, uint32_t);
 void kputx(uint64_t);
 
-uint8_t tty_init(char*);
+uint8_t tty_init();
 
 
 #ifdef __cplusplus
@@ -39,5 +39,5 @@ uint8_t tty_init(char*);
 
 
 
-#endif  
+#endif
 

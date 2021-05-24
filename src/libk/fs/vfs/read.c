@@ -17,6 +17,11 @@ int64_t vfs_read_file(struct file_descriptor *fdes, void *buf, int64_t amount) {
 		to_read = node->size - fdes->pos;
 	}
 
+	if (to_read == 0) {
+		release_semaphore(node->mutex);
+		return ERR_EOF;
+	}
+
 	/* Request the filesystem driver to read from disk. */
 	int64_t stat = node->fs->driver->read(node->fs, node->inode_num, buf, fdes->pos, to_read);
 
@@ -25,8 +30,7 @@ int64_t vfs_read_file(struct file_descriptor *fdes, void *buf, int64_t amount) {
 		fdes->pos += stat;
 	}
 	return stat;
-};
-
+}
 
 
 int64_t vfs_read_pipe(struct file_descriptor *fdes, void *buf, int64_t amount) {
@@ -58,19 +62,18 @@ int64_t vfs_read_pipe(struct file_descriptor *fdes, void *buf, int64_t amount) {
 		memcpy(buf, node->pipe_mem, to_read);
 
 		/* Remove the data read from the pipe. */
-		memcpy(node->pipe_mem, node->pipe_mem + to_read, DEFAULT_PIPE_SIZE - to_read);
+		memcpy(node->pipe_mem, (uint8_t *)node->pipe_mem + to_read, DEFAULT_PIPE_SIZE - to_read);
 
 		amount -= to_read;
 		node->size -= to_read;
-		buf += to_read;
+		buf = (uint8_t *)buf + to_read;
 		ret += to_read;
 	}
 
 	signal_queue(node->write_queue);
 	release_semaphore(node->mutex);
 	return ret;
-};
-
+}
 
 
 int64_t kread(int32_t fd, void *buf, int64_t amount) {
@@ -84,5 +87,4 @@ int64_t kread(int32_t fd, void *buf, int64_t amount) {
 	struct file_vnode *fnode = fdes->node;
 
 	return fnode->read(fdes, buf, amount);
-};
-
+}

@@ -43,7 +43,3 @@ uint8_t init_memory(struct stivale2_struct_tag_memmap *memtag) {
 
 	return GENERIC_SUCCESS;
 }
-
-
-
-

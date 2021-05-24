@@ -9,13 +9,13 @@ AS := nasm
 # This is the emulator to run the image on. Currently we use QEMU.
 EMUL := qemu-system-x86_64 -cpu qemu64 
 
-KERNELFLAGS := -O2 -std=c99 -Wall -Wextra -mcmodel=large -fno-pic -fno-stack-protector -mno-red-zone \
-	-ffreestanding -nostdlib --sysroot="src/" -isystem="/libk/include/" 
+KERNELFLAGS := -O3 -std=c99 -Wall -Wextra -mcmodel=large -fno-pic -fno-stack-protector -mno-red-zone \
+	-ffreestanding -nostdlib --sysroot="./src/" -isystem="/libk/include/" -pedantic
 
 # Uncomment this while debugging. 
-#KERNELFLAGS += -DDEBUG
+#KERNELFLAGS += -DDEBUG -fsanitize=undefined
 
-KERNELLINK := -ffreestanding -lgcc  -nostdinc  -nostdlib -no-pie -static -mcmodel=kernel \
+KERNELLINK := -ffreestanding -lgcc  -nostdinc  -nostdlib -static -mcmodel=kernel \
 	-z max-page-size=0x1000
 
 LIBKDIR := src/libk/
@@ -66,6 +66,8 @@ libk.a: $(LIBKOBJ)
 qemu: 
 	@$(EMUL) -drive file=$(IMG),format=raw
 
+qemu-debug:
+	@$(EMUL) -drive file=$(IMG),format=raw -s -S
 
 clean:
 	@$(RM) $(KERNELOBJ) $(LIBKOBJ) "root/boot/kernel.elf"

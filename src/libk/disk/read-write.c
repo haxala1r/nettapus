@@ -33,7 +33,7 @@ size_t drive_read_sectors(struct drive *d, void *buf, size_t lba, size_t amount)
 
 	release_semaphore(d->dev->mutex);
 	return stat;
-};
+}
 
 size_t drive_write_sectors(struct drive *d, void *buf, size_t lba, size_t amount) {
 	if (d == NULL) { return ERR_INVALID_PARAM; }
@@ -64,6 +64,4 @@ size_t drive_write_sectors(struct drive *d, void *buf, size_t lba, size_t amount
 
 	release_semaphore(d->dev->mutex);
 	return stat;
-};
-
-
+}

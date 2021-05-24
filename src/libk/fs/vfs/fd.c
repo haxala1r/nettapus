@@ -16,7 +16,7 @@ struct file_descriptor *vfs_find_fd(struct task *t, int32_t fd) {
 	};
 
 	return i;
-};
+}
 
 
 struct file_descriptor *vfs_create_fd(struct task *t, void *node, size_t file, size_t mode) {
@@ -60,9 +60,4 @@ struct file_descriptor *vfs_create_fd(struct task *t, void *node, size_t file, s
 
 	unlock_scheduler();
 	return new_fd;
-};
-
-
-
-
-
+}

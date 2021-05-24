@@ -31,7 +31,7 @@
       |-------------> Kernel heap.
       |
       |
-0xFFFFFFFFA0100000
+0xFFFFFFFFA0200000
 
-The rest is currently unused, except for 0xFFFFFFFFFB000000, which is mapped to
-the linear framebuffer set up by the bootloader.
+The rest is currently unused, except for 0xFFFFFFFFFB000000, which is always
+mapped to the linear framebuffer set up by the bootloader.

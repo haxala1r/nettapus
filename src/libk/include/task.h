@@ -38,10 +38,11 @@ struct task_registers {
 
 	/* This is here to make sure the starting address of fxsave_area is 16-byte aligned.
 	 * Though there isn't much point in that, as the area is still not guaranteed to be
-	 * aligned if the starting address of the structure isn't 16-byte aligned. */
+	 * aligned if the starting address of the structure isn't 16-byte aligned.
+	 */
 	uint64_t __filler;
 
-	char __attribute__((aligned(16))) fxsave_area[544];
+	char fxsave_area[544];
 } __attribute__((packed));
 
 
@@ -51,13 +52,10 @@ struct task {
 	/* File descriptors open for this process.  */
 	struct file_descriptor *fds;
 
-	/* The amount of time this task has remaining (in ticks) */
 	uint64_t ticks_remaining;
 
-	/* The current state of the task (whether it can run or not etc.) */
 	uint64_t state;
 
-	/* This is here for a linked list. */
 	struct task *next;
 };
 

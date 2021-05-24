@@ -19,8 +19,8 @@
  */
 
 #include <mem.h>
-#include <pci.h>
 #include <disk/disk.h>
+#include <pci.h>
 #include <fs/fs.h>
 #include <string.h>
 #include <vga.h>
@@ -28,8 +28,8 @@
 #include <interrupts.h>
 #include <task.h>
 #include <keyboard.h>
-
-
+#include <config.h>
+#include <err.h>
 
 static uint8_t stack[4096 * 2];
 
@@ -69,16 +69,17 @@ void *get_stivale_header(struct stivale2_struct *s, uint64_t id) {
 		i = (void*)i->next;
 	}
 	return NULL;
-};
+}
 
 
 extern void loadGDT();
 void second_task();
 int32_t fds[2];
 void _start(struct stivale2_struct *hdr) {
+
 	/* We should load our own GDT as soon as possible. */
 	loadGDT();
-
+	init_serial();
 	/*
 	 * It is important that we extract all the information from the bootloader
 	 * we need before loading our own page tables.
@@ -97,7 +98,11 @@ void _start(struct stivale2_struct *hdr) {
 	struct stivale2_struct_tag_memmap* mm = get_stivale_header(hdr, STIVALE2_STRUCT_TAG_MEMMAP_ID);
 
 	/* We have everything we need. Now initialise the memory manager. */
-	init_memory(mm);
+	if (init_memory(mm)) {
+		serial_puts("Memory init failed.\r\n");
+		kpanic();
+	}
+	serial_puts("Memory manager OK\r\n");
 
 
 	/*
@@ -108,10 +113,11 @@ void _start(struct stivale2_struct *hdr) {
 	map_memory(fb_addr, 0xFFFFFFFFFB000000, fb_len/0x1000, kgetPML4T());
 
 	krefresh_vmm();		/* Refresh the page tables. */
-
-	vga_init(0xFFFFFFFFFB000000, fb_width, fb_height, fb_bpp, fb_pitch);
-
-
+	if (vga_init(0xFFFFFFFFFB000000, fb_width, fb_height, fb_bpp, fb_pitch)) {
+		serial_puts("VGA init failed.\r\n");
+		kpanic();
+	}
+	serial_puts("VGA OK\r\n");
 
 	/* Now initialise everything else. The screen will be filled with red on failure.
 	 * This "failure report mechanism" is not perfect, and will not even work if an error
@@ -120,46 +126,62 @@ void _start(struct stivale2_struct *hdr) {
 
 	/* First, interrupts. */
 	if (init_interrupts()) {
+		serial_puts("Interrupt setup failed.\r\n");
 		kpanic();
 	}
 
 	/* We can get the scheduler up as well. */
 	if (init_scheduler()) {
+		serial_puts("Scheduler failed to initialise.\r\n");
 		kpanic();
 	}
+	serial_puts("Scheduler OK\r\n");
 
 	/* PCI. The IDE driver depends on this. */
 	if (pci_scan_all_buses()) {
+		serial_puts("PCI failed initialise.\r\n");
 		kpanic();
 	}
+	serial_puts("PCI OK\r\n");
 
+	/* Disk drivers. */
 	if (init_disk()) {
+		serial_puts("Disk driver failed to initialise.\r\n");
 		kpanic();
 	}
+	serial_puts("Disk OK\r\n");
 
 	/* The file system drivers. */
 	if (!init_fs()) {
+		serial_puts("FS drivers failed to initialise and/or no FS was found.\r\n");
 		kpanic();
 	}
-	//__asm__("cli;hlt;");  /* It works fine until here. */
-	/* The TTY driver takes a file name as its init function's only parameter. This file
-	 * contains the fonts used by the driver itself. This is the reason we have to initialise
-	 * the FS drivers *before* TTY.
-	 */
-	while (tty_init("/fonts/lat9-08.psf")) {
-		/* Attempt to mount a different file-system. Halt if there are none. */
-		struct file_system *fs = fs_get_root();
-		if (fs_set_root(fs->next)) {
-			vga_fill_screen(0x0000ff);
-			__asm__("cli;hlt;");
-		}
+	serial_puts("FS & VFS OK\r\n");
+
+	/* Read the configuration file, and load settings from it. */
+	if (reload_config("/boot/nettapus.cfg")) {
+		serial_puts("Config file not found.\r\n");
+	} else {
+		serial_puts("Config file loaded.\r\n");
+		#ifdef DEBUG
+		config_put_variables();
+		#endif
 	}
+
+	/* TTY. This will ask for a config variable name font_file. */
+	if (tty_init()) {
+		serial_puts("TTY failed.\r\n");
+		kpanic();
+	}
+	serial_puts("TTY OK\r\n");
 
 	if (init_kbd()) {
 		kpanic();
 	}
+	serial_puts("Keyboard OK\r\n");
 
 	kputs("Hello, world!\n");
+	kputs("Hello, world?\n");
 
 	/* This is a simple test to see if pipes are working properly.
 	 * Here's how it works:

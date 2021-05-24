@@ -10,6 +10,7 @@ uint8_t get_step(char *out, char **cur, char sep, size_t max) {
 	if (*cur == NULL)  { return ERR_INVALID_PARAM; }
 	if (max == 0)      { return GENERIC_SUCCESS;   }
 
+	/* Skip the first appearences of the seperator. */
 	while (**cur == sep && **cur != '\0') {
 		*cur += 1;
 	}
@@ -25,11 +26,10 @@ uint8_t get_step(char *out, char **cur, char sep, size_t max) {
 		max--;
 	}
 
-	//++(*cur);
 	*out = '\0';
 
 	return GENERIC_SUCCESS;
-};
+}
 
 size_t get_step_count(char *str, char sep) {
 	if (str == NULL) { return 0; }
@@ -44,7 +44,7 @@ size_t get_step_count(char *str, char sep) {
 	}
 
 	return steps;
-};
+}
 
 
 char **fs_parse_path(char *path) {
@@ -65,7 +65,7 @@ char **fs_parse_path(char *path) {
 	}
 
 	return arr;
-};
+}
 
 void fs_free_path(char **arr) {
 	if (arr == NULL) {
@@ -82,4 +82,4 @@ void fs_free_path(char **arr) {
 	/* Free the array that keeps the strings. */
 	kfree(arr);
 	return;
-};
+}

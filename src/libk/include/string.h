@@ -16,7 +16,7 @@ void *memmove(void*, void*, size_t);
 size_t strlen(const char*);
 size_t strcmp(const char*, const char*);
 
-int32_t atoi(const char*);
+int64_t atol(const char *buf);
 int32_t atox(const char*);
 
 char xbtoa(uint8_t);

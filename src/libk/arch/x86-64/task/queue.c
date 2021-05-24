@@ -35,13 +35,11 @@ void wait_queue(QUEUE *q) {
 
 	unlock_task_switches();
 	return;
-};
+}
 
 
 void signal_queue(QUEUE *q) {
-	/* This function simply wakes up the next task on the queue to inform it
-	 * that more data is available.
-	 */
+	/* This function simply wakes up the next task on the queue. */
 
 	if (q->amount_waiting == 0) {
 		return;
@@ -49,8 +47,9 @@ void signal_queue(QUEUE *q) {
 
 	lock_task_switches();
 
-	q->amount_waiting--;
+
 	if (q->first_task != NULL) {
+		q->amount_waiting--;
 		unblock_task(q->first_task);
 		q->first_task = q->first_task->next;
 		if (q->first_task == NULL) {
@@ -78,5 +77,5 @@ void destroy_queue(QUEUE *q) {
 	 * semaphores, too! That sounds good, but I'll have to do it in another commit.
 	 */
 	kfree(q);
-};
+}
 

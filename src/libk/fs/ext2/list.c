@@ -16,7 +16,7 @@ struct file_tnode *ext2_list_files(struct file_system *fs, size_t inode, size_t 
 	if (ext2_load_inode(fs, parent, inode)) {
 		kfree(parent);
 		return NULL;
-	};
+	}
 
 	/* These may look like they only work for file tnodes, but since the structures
 	 * are practically the same with just namechanges, the same code will work
@@ -25,7 +25,7 @@ struct file_tnode *ext2_list_files(struct file_system *fs, size_t inode, size_t 
 	struct file_tnode *first_tnode = NULL;
 	struct file_tnode *last_tnode = NULL;
 
-	void *block_buf = kmalloc(e2fs->block_size);
+	uint8_t *block_buf = kmalloc(e2fs->block_size);
 
 	size_t block = 0;
 	size_t block_addr;
@@ -41,13 +41,13 @@ struct file_tnode *ext2_list_files(struct file_system *fs, size_t inode, size_t 
 			kfree(block_buf);
 			kfree(parent);
 			return NULL;
-		};
+		}
 
 		/* Iterate over every entry in this block. */
-		struct ext2_dir_entry *entry = block_buf;
+		struct ext2_dir_entry *entry = (void *)block_buf;
 		size_t i = 0;
 		while (1) {
-			entry = block_buf + i;
+			entry = (void *)(block_buf + i);
 			if (entry->size < sizeof(*entry)) {
 				goto done;  /* This must be the last entry. */
 			}
@@ -83,7 +83,7 @@ done:
 	kfree(block_buf);
 	kfree(parent);
 	return first_tnode;
-};
+}
 
 
 struct folder_tnode *ext2_list_folders(struct file_system *fs, size_t inode, size_t *count) {
@@ -98,12 +98,12 @@ struct folder_tnode *ext2_list_folders(struct file_system *fs, size_t inode, siz
 	if (ext2_load_inode(fs, parent, inode)) {
 		kfree(parent);
 		return NULL;
-	};
+	}
 
 	struct folder_tnode *first_tnode = NULL;
 	struct folder_tnode *last_tnode = NULL;
 
-	void *block_buf = kmalloc(e2fs->block_size);
+	uint8_t *block_buf = kmalloc(e2fs->block_size);
 
 	size_t block = 0;
 	size_t block_addr;
@@ -119,13 +119,13 @@ struct folder_tnode *ext2_list_folders(struct file_system *fs, size_t inode, siz
 			kfree(block_buf);
 			kfree(parent);
 			return NULL;
-		};
+		}
 
 		/* Iterate over every entry in this block. */
-		struct ext2_dir_entry *entry = block_buf;
+		struct ext2_dir_entry *entry = (void *)block_buf;
 		size_t i = 0;
 		while (1) {
-			entry = block_buf + i;
+			entry = (void *)(block_buf + i);
 			if (entry->size < sizeof(*entry)) {
 				goto done;  /* This must be the last entry. */
 			}
@@ -140,8 +140,9 @@ struct folder_tnode *ext2_list_folders(struct file_system *fs, size_t inode, siz
 					last_tnode = last_tnode->next;
 				}
 
-				last_tnode->folder_name = kmalloc(strlen(&entry->nm) + 1);
-				memcpy(last_tnode->folder_name, &entry->nm, strlen(&entry->nm) + 1);
+				last_tnode->folder_name = kmalloc(entry->name_len + 1);
+				memcpy(last_tnode->folder_name, &entry->nm, entry->name_len);
+				last_tnode->folder_name[entry->name_len] = '\0';
 				last_tnode->vnode = NULL;
 				last_tnode->next = NULL;
 				*count += 1;
@@ -161,6 +162,4 @@ done:
 	kfree(block_buf);
 	kfree(parent);
 	return first_tnode;
-};
-
-
+}

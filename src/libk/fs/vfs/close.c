@@ -41,7 +41,7 @@ int32_t vfs_close_file(struct task *t, struct file_descriptor *fd) {
 	kfree(fd);
 
 	return GENERIC_SUCCESS;
-};
+}
 
 
 int32_t kclose(int32_t fd) {
@@ -58,5 +58,4 @@ int32_t kclose(int32_t fd) {
 		/* TODO */
 	}
 	return GENERIC_SUCCESS;
-};
-
+}

@@ -21,15 +21,15 @@ size_t drive_parse_mbr(struct drive *d) {
 	 * time.
 	 */
 	for (uint8_t i = 0; i < 4; i++) {
-		uint32_t *lmbr = (uint32_t*)(mbr + 0x1BE + i * 0x10);
+		uint8_t *mbre = (uint8_t*)(mbr + 0x1BE + i * 0x10);
 
 		/* Check the Partition Type field. If non-zero, the partition is used. */
 		if (mbr[0x1BE + i * 0x10 + 4] != 0) {
 			/* Create a new drive object. */
 			struct drive *new_drive = kmalloc(sizeof(struct drive));
 			new_drive->dev = d->dev;
-			new_drive->starting_sector = lmbr[2];
-			new_drive->sector_count = lmbr[3];
+			new_drive->starting_sector = mbre[8] | (mbre[9] << 8) | (mbre[10] << 16) | (mbre[11] << 24);
+			new_drive->sector_count = mbre[12] | (mbre[13] << 8) | (mbre[14] << 16) | (mbre[15] << 24);
 			new_drive->type = check_drive(new_drive);
 
 			if (register_drive(new_drive)) {
@@ -43,7 +43,4 @@ size_t drive_parse_mbr(struct drive *d) {
 	kfree(mbr);
 	return parts_found;
 
-};
-
-
-
+}

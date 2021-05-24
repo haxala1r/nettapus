@@ -2,6 +2,7 @@
 #include <disk/ide.h>
 #include <mem.h>
 #include <task.h>
+#include <err.h>
 
 /* Disks are physical storage mediums. Drives are a range of sectors within a disk.
  * They can be partitions, filesystems etc. etc. or they can be the whole disk as
@@ -43,7 +44,7 @@ struct disk *register_disk(uint8_t type, void *dptr) {
 		disks = new_disk;
 	}
 	return new_disk;
-};
+}
 
 size_t register_drive(struct drive *d) {
 	if (d == NULL) { return 1;}
@@ -72,8 +73,7 @@ size_t register_drive(struct drive *d) {
 	}
 
 	return 0;
-};
-
+}
 
 size_t register_drives(struct disk *d) {
 	if (d == NULL) { return 1; }
@@ -100,7 +100,7 @@ size_t register_drives(struct disk *d) {
 
 
 	return register_drive(new_drive);
-};
+}
 
 uint8_t refresh_disks() {
 
@@ -152,13 +152,13 @@ uint8_t refresh_disks() {
 	};
 
 	return 0;
-};
+}
 
 uint8_t init_disk() {
 	/* Currently our only way of accessing a disk is through IDE. */
 	if (init_ide()) {
 		return 1;
 	}
-
+	serial_puts("IDE OK\r\n");
 	return refresh_disks();
-};
+}
