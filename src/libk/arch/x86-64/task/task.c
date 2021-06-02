@@ -2,6 +2,7 @@
 #include <task.h>
 #include <string.h>
 #include <mem.h>
+#include <err.h>
 
 struct task *current_task;
 struct task *first_task;
@@ -31,7 +32,7 @@ struct task *get_current_task() {
 }
 
 
-void initialise_task(struct task *t, void (*main)(), uint64_t pml4t, uint64_t flags, uint64_t stack) {
+void initialise_task(struct task *t, void (*main)(), uint64_t pml4t, uint64_t flags, uint64_t stack, uint64_t kernel_stack, size_t ring) {
 	t->reg.rax 	= 0;
 	t->reg.rbx 	= 0;
 	t->reg.rcx 	= 0;
@@ -48,37 +49,83 @@ void initialise_task(struct task *t, void (*main)(), uint64_t pml4t, uint64_t fl
 	t->reg.r15 	= 0;
 
 	t->reg.rbp 	= stack;
-	t->reg.rsp 	= stack;
+	t->reg.rsp 	= stack-8;
+
+	/* OK, this is important.
+	 * The main function isn't set as the RIP. instead a task loader function is
+	 * set, and the main function's address is put on the task's stack.
+	 * The loader function simply loads this value, determines segment registers
+	 * etc, unlocks the scheduler,
+	 * and then switches to itself, which causes the real task to start execution.
+	 */
+	loadPML4T((uint64_t*)pml4t);
+	loadPML4T((uint64_t*)pml4t);
+
+	uint64_t *return_ptr = (uint64_t*)(stack - 8);
+	*return_ptr = (uint64_t)main;
+
+	loadPML4T((uint64_t*)kgetPML4T()->physical_address);
+
+	/* The kernel stack is used for system calls and interrupts for each task.
+	 * It's very unhealthy to use the task's stack, as it may become invalid.
+	 * Thus, a seperate kernel stack is kept for each task.
+	 * The stack in the TSS can't be used either, because irq0 isn't guaranteed
+	 * to return. It might task switch, in which case another IRQ will ruin the
+	 * stack. Since no more than one IRQ can be using a task's kernel stack by
+	 * definition, this works flawlessly.
+	 */
+	t->reg.kernel_rsp = kernel_stack;
 
 	t->reg.cr3 	= pml4t;
 	t->reg.rflags = flags;
-	t->reg.rip 	= (uint64_t)main;
+	t->reg.rip 	= (uint64_t)task_loader;
 
-	memset(t->reg.fxsave_area, 0, 512);
+	/* The loader function sets the correct segments according to the ring value.*/
+	t->reg.cs = 0x08;
+	t->reg.ds = 0x10;
+
+	//memset(t->reg.fxsave_area, 0, 512);
 
 
 	t->next = NULL;
 	t->ticks_remaining = TASK_DEFAULT_TIME;
+	t->ring = ring;
 	t->fds = current_task ? current_task->fds : NULL;	/* VFS layer will initialise this. */
 }
 
 
-uint8_t create_task(void (*main)()) {
+uint8_t create_task(void (*main)(), p_map_level4_table *pml4t, size_t ring) {
 	if (main == NULL) {
 		return 1;
 	}
+	/* This function takes a pointer to the start of an executable, creates an
+	 * address space for the new task, and then executes that task. */
 
 	lock_scheduler();
 	struct task *t = kmalloc(sizeof(struct task));
 
 	if (t == NULL) {
-
 		unlock_scheduler();
 		return 1;
 	}
 
-	/* The part to allocate a new stack should be improved. */
-	initialise_task(t, main, kgetPML4T()->physical_address, 0x202, alloc_pages(1, 0x80000000, -1) + 0x1000);
+	/* Now set the address space. */
+	t->pml4t = pml4t
+
+	/* Ensure that the kernel is mapped. */
+	t->pml4t->child[511] = kgetPDPT();
+	t->pml4t->entries[511] = kgetPDPT()->physical_address | 2 | 1;
+
+	/* Create a stack. The caller must ensure that these addresses aren't mapped
+	 * to anything else.
+	 */
+	size_t stack_base = allocpp() * 0x1000; // user stack.
+	map_memory(stack_base, 0x80000000, 1, t->pml4t, 1);
+
+	size_t kernel_stack_base = allocpp() * 0x1000;  // kernel stack.
+	map_memory(kernel_stack_base, 0x90000000, 1, t->pml4t, 0);
+
+	initialise_task(t, main, t->pml4t->physical_address, 0x202, 0x80000000 + 0x1000, 0x90000000 + 0x1000, ring);
 
 	/* Link the new task we created. */
 	if (first_task != NULL) {
@@ -204,7 +251,8 @@ void scheduler_irq0() {
 		/* The CPU is idle. */
 		return;
 	}
-
+	serial_putx(current_task->ticks_remaining);
+	serial_puts("\r\n");
 	/* Decrement the current task's counter. */
 	if (current_task->ticks_remaining != 0) {
 		lock_scheduler();	/* For protection in SMP. */
@@ -267,18 +315,24 @@ void unlock_task_switches() {
 
 
 uint8_t init_scheduler() {
+	uint8_t stat;
+	if ((stat = init_tss())) {
+		return stat;
+	}
 	lock_scheduler();
 
 	current_task = kmalloc(sizeof(*current_task));
 	if (current_task == NULL) {
 		return 1;
 	}
-
+	memset(current_task, 0, sizeof(*current_task));
 
 	current_task->state = TASK_STATE_RUNNING;
 	current_task->next = current_task;
 	current_task->fds = NULL;	/* The VFS layer will initialise this. */
 	current_task->ticks_remaining = TASK_DEFAULT_TIME;
+	current_task->ring = 0;
+	current_task->reg.kernel_rsp = (uint64_t)kmalloc(0x1000) + 0x1000 ;
 
 	/* Initialise the global variables. */
 	last_task = NULL;

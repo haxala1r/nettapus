@@ -132,11 +132,13 @@ typedef struct heap heap_t;
 //generic things.
 memory_map_t* getPhysicalMem();
 p_map_level4_table* kgetPML4T();
+pd_ptr_table *kgetPDPT(void);
 heap_t* kgetHeap();		//returns a pointer to kernel's heap.
 uint64_t page_to_addr(uint64_t);	//tells you at which address a page starts. doesn't check the validity of the page.
 uint64_t addr_to_page(uint64_t);	//tells you at which page the address resides in. doesn't check the validity of the address.
 void _create_block(uint64_t, uint64_t, memory_block_t*);	//internal function. creates a block object from address and length.
 void krefresh_vmm();
+struct page_struct *alloc_page_struct(void);
 
 //Physical memory management.
 uint8_t ispaValid(uint64_t);	//tells whether an address is valid or not.(physical addresses). returns 1 if it is.
@@ -155,11 +157,11 @@ uint8_t freepp(uint64_t);			//"frees" a single physical page.
 
 //Virtual memory management
 
-uint8_t map_memory(uint64_t phys, uint64_t virt, uint64_t amount, p_map_level4_table*);	//maps a single physical page to a virtual page. doesn't check if pp is avilable.
+uint8_t map_memory(uint64_t phys, uint64_t virt, uint64_t amount, p_map_level4_table*, size_t user_accessible);	//maps a single physical page to a virtual page. doesn't check if pp is avilable.
 uint8_t unmap_page(uint64_t virt, uint64_t amount, p_map_level4_table*);	//unmaps a virtual page, also frees the physical page attached to it.
 
 /* Allocates a random physical page and a random virtual one. Starting address is returned. */
-uint64_t alloc_pages(uint64_t amount, uint64_t base, uint64_t limit);
+uint64_t alloc_pages(uint64_t amount, uint64_t base, uint64_t limit, size_t user_accessible);
 
 
 

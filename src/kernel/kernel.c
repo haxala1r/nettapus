@@ -73,8 +73,10 @@ void *get_stivale_header(struct stivale2_struct *s, uint64_t id) {
 
 
 extern void loadGDT();
-void second_task();
-int32_t fds[2];
+void user_task();
+extern void switch_to_userspace(struct task_registers *from, struct task_registers *to);
+extern uint64_t get_cr3();
+
 void _start(struct stivale2_struct *hdr) {
 
 	/* We should load our own GDT as soon as possible. */
@@ -110,7 +112,7 @@ void _start(struct stivale2_struct *hdr) {
 	 * need to initialise the file system etc. before the console is ready.
 	 */
 	uint64_t fb_len = fb_width * fb_bpp/8 + fb_height * fb_pitch;
-	map_memory(fb_addr, 0xFFFFFFFFFB000000, fb_len/0x1000, kgetPML4T());
+	map_memory(fb_addr, 0xFFFFFFFFFB000000, fb_len/0x1000, kgetPML4T(), 1);
 
 	krefresh_vmm();		/* Refresh the page tables. */
 	if (vga_init(0xFFFFFFFFFB000000, fb_width, fb_height, fb_bpp, fb_pitch)) {
@@ -181,50 +183,35 @@ void _start(struct stivale2_struct *hdr) {
 	serial_puts("Keyboard OK\r\n");
 
 	kputs("Hello, world!\n");
-	kputs("Hello, world?\n");
-
-	/* This is a simple test to see if pipes are working properly.
-	 * Here's how it works:
-	 * 	The first task continuously writes "Hello there!\n" to the write
-	 * 	end of the pipe, and the second task reads from the pipe two bytes
-	 * 	at a time and prints it. If everything is working properly,
-	 * 	then you should see a continuos stream of the same string repeated
-	 * 	over and over again.
-	 */
-
-	/* Create the pipe. Currently, when a task is created, the current
-	 * task's file descriptors are copied over for this to work.
-	 * TODO: That should be changed in the near future.
-	 */
-	if (pipeu(get_current_task(), fds)) {
+	uint64_t addr = alloc_pages(1, 0x40000000, 0x40002000, 1);
+	/* open and read the executable. */
+	int32_t fd = kopen("/app", 0);
+	if (fd < 0) {
+		serial_puts("App not found\r\n");
 		kpanic();
 	}
 
-	/* The string to be written. */
-	char *str = "Hello there!\n";
+	if (kread(fd, (void*)addr, 0x1000) < 0) {
+		serial_puts("Failure while reading\r\n");
+		kpanic();
+	}
+	kclose(fd);
 
-	/* Create the second task. */
-	create_task(second_task);
-
-	/* The first task repeatedly writes the same string to the pipe. */
+	create_task((void (*)())addr, 3);
 	while (1) {
-		if (kwrite(fds[1], str, strlen(str)) == -1) {
-			kpanic();
-		}
+		kputs("Hello\n");
+		__asm__("hlt;");
 	}
 }
 
-char buf[16];
-void second_task() {
-	unlock_scheduler();
-
-	/* The second task repeatedly reads from the pipe, 2 bytes at a time. */
-	while (1){
-		memset(buf, 0, 16);
-		if (kread(fds[0], buf, 2) == -1) {
-			kpanic();
+void user_task() {
+	volatile size_t i = 0;
+	while (1) {
+		while (i != 0) {
+			i++;
 		}
-		kputs(buf);
+		__asm__("int $0x80;" : : "rax"(i) :);
+		i++;
 	}
 }
 

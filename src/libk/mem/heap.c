@@ -312,7 +312,7 @@ uint8_t kfree(void *ptr) {
 
 uint8_t init_heap(void) {
 	/* Maps 256 pages to the heap. 0xFFFFFFFFA0000000 is the kernel's heap's address.*/
-	if (map_memory(page_to_addr(allocpps(256)), 0xFFFFFFFFA0000000, 512, kgetPML4T())) {
+	if (map_memory(page_to_addr(allocpps(256)), 0xFFFFFFFFA0000000, 512, kgetPML4T(), 1)) {
 		return 1;
 	}
 	krefresh_vmm();

@@ -20,7 +20,7 @@ extern "C" {
 struct IDT_entry {
 	uint16_t offset_low16;
 	uint16_t selector;
-	uint8_t zero;
+	uint8_t ist;
 	uint8_t type_attr;
 	uint16_t offset_mid16;
 	uint32_t offset_hi32;
@@ -42,8 +42,16 @@ extern void irq2();
 extern void irq3();
 
 
-extern void exception_divide_by_zero();
-extern void exception_double_fault();
+extern void exception_divide_by_zero(void);
+extern void exception_double_fault(void);
+extern void exception_gpf(void);
+extern void exception_ud(void);
+extern void exception_ts(void);
+extern void exception_np(void);
+extern void exception_ss(void);
+extern void exception_pf(void);
+
+extern void syscall_interrupt(void);
 
 
 void put_time();

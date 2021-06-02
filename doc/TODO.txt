@@ -8,15 +8,15 @@ Remove things from here once they are completed, and add it to changelog.txt
 	if either a queue or semaphore is destroyed while there are tasks that are
 	waiting on that queue/semaphore, they will stay blocked forever.
 
-	- Scheduler : Allow switch_task() to switch to user mode code with a parameter.
++	- Scheduler : Allow switch_task() to switch to user mode code with a parameter.
 	Also allow for user-mode tasks in general, probably also adding things like
 	kernel-stacks per process, pids, uids, gids, etc. etc.
 
-	- Userspace : Implement syscalls. Starting with exit(), open(), close(),
++	- Userspace : Implement syscalls. Starting with exit(), open(), close(),
 	read(), write() (in that order) seems appropriate. A syscall table needs
 	to be made. An ELF parser, a program loader etc. need to be made.
 
-	- Scheduler : Proper memory should be allocated for tasks. This is going to
++	- Scheduler : Proper memory should be allocated for tasks. This is going to
 	become especially relevant when we need to allocate kernel stacks and cannot
 	use the task's own stack for interrupts (i.e. userspace tasks). This could
 	be integrated into the VMM's "page heap" thingy which provides page-aligned
@@ -41,3 +41,8 @@ Remove things from here once they are completed, and add it to changelog.txt
 	of being rushed, with several key functions (which are admittedly never even
 	used so far) commented out with missing implementation.I have to admit, it
 	kind of *is* rushed, so can't really blame anyone but myself for that.
+
+	- Heap: Implement a more efficient heap algorithm. AVL trees look particularly
+	interesting because allocation doesn't always require the creation of a new chunk,
+	the overhead is small and it's O(log(N)), also it seems like a very elegant
+	solution in general.

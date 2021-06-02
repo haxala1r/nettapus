@@ -26,7 +26,6 @@ void acquire_semaphore(SEMAPHORE *s) {
 	/* This is where the spinlock would go, but we don't have
 	 * SMP, so this works well enough.
 	 */
-	lock_scheduler();
 	lock_task_switches();
 
 
@@ -60,7 +59,6 @@ void acquire_semaphore(SEMAPHORE *s) {
 	}
 
 	/* This is where the lock for this semaphore would be released. */
-	unlock_scheduler();
 	unlock_task_switches();
 
 	return;
@@ -109,5 +107,6 @@ void destroy_semaphore(SEMAPHORE *s) {
 	lock_scheduler();
 
 	kfree(s);
+	unlock_scheduler();
 }
 

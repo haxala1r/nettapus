@@ -2,64 +2,52 @@
 %include "src/libk/arch/x86-64/interrupts/macros.asm"
 
 GLOBAL switch_task
+GLOBAL task_loader
+EXTERN unlock_scheduler
+EXTERN get_current_task
 
-
-
+; TODO: REWRITE THIS ENTIRE MECHANISM, SO THAT USER-TASKS ARENT ANY DIFFERENT THAN
+; KERNEL TASKS. THE TASK SWITCH CODE SHOULD SIMPLY SET REGISTERS & JUMP.
+; A GOOD IDEA WOULD BE TO ALWAYS USE IRETQ, REGARDLESS OF RING. THAT WAY,
+; YOU DONT NEED TO DO ANYTHING MORE THAN SET VARIABLES (MAYBE HAVE A LOADER FUNC ETC).
+; HAVE THE SEGMENT REGISTERS BE PART OF task_registers AND REMOVE THE ring VARIABLE
+; FROM task (Or maybe not, but it won't be used by switch_task).
+; TODO incorporate this into the actual fucking scheduler.
 switch_task:
+	; This function does the same thing as above, excpet it returns to userspace
+	; instead.
 	; RSI should contain a pointer to the registers of the task to be switched to.
 	; RDI should contain a pointer to the registers of the task to be switched from.
-	; The structure is defined in task.h
 
+	cmp rsi, 0
+	jz switch_task.reg_return
 	cmp rdi, 0
-	je switch_task.restore
+	jz switch_task.load
+	; Save the current values for all the registers we're going to push for iretq.
+	.save:
+	mov QWORD [rdi + 0xA0], ss  ; SS
+	mov QWORD [rdi + 0x70], rsp ; RSP
+	; We can save rflags later.
+	mov QWORD [rdi + 0x98], cs  ; CS
+	; Thanks to us saving the ret instruction as RIP, when another task switches
+	; to this one, everything will be as if this function returned normally.
+	mov QWORD [rdi + 0x80], switch_task.reg_return ; RIP
 
-	push rax 	; Save rax.
-
-	; We need to save RIP. Not really, we can just specify whatever we want.
-	mov rax, switch_task.return
-	mov [rdi + 0x80], rax	; The new RIP will be loaded later.
-
-	; Let's do CR3 now.
-
-	mov rax, cr3
-
-	mov [rdi + 0x88], rax			; Save current cr3.
-	mov rax, [rsi + 0x88]			; Load new cr3.
-
-	mov cr3, rax
-
-	; Now RFLAGS.
+	; Save rflags. Target flags will be loaded by iretq
+	push rax
 	pushfq
 	pop rax
+	mov [rdi + 0x90], rax
+	; Don't restore RAX yet!
 
-	mov [rdi + 0x90], rax	; Save current RFLAGS.
-	mov rax, [rsi + 0x90]		; Load the new RFLAGS.
-
-	push rax
-	popfq
-
-
-	; Now the SSE registers.
-	; We need to make sure the address is 16-byte aligned.
-	push rbx
-
-	mov rbx, 0
-	mov rax, rdi
-	and rax, 0xF
-	jz switch_task.fx_save
-
-	mov rbx, 0x10
-	sub rbx, rax
-
-	.fx_save:
-	fxsave [rdi + 0xA0 + rbx]
-
-
-
-	; Restore the registers, because we need to save the general-purpose registers.
-	pop rbx
+	; save old CR3 and load new CR3.
+	mov rax, cr3
+	mov [rdi + 0x88], rax
 	pop rax
 
+	; TODO: handle SSE registers as well (fxsave fxrstor)
+
+	; Save the current GPRs.
 	mov [rdi], rax
 	mov [rdi + 0x08], rbx
 	mov [rdi + 0x10], rcx
@@ -75,26 +63,23 @@ switch_task:
 	mov [rdi + 0x60], r14
 	mov [rdi + 0x68], r15
 
-	mov [rdi + 0x70], rsp
-	mov [rdi + 0x78], rbp
+	;mov [rdi + 0x70], rsp ; we already saved rsp above.
+	mov [rdi + 0x78], rbp ; rbp wasn't changed in this function.
+
+	; Load.
+	.load:
+	; Now set up the stack how iretq expects to find it.
+	push QWORD [rsi + 0xA0]  ; SS
+	push QWORD [rsi + 0x70]  ; RSP
+	push QWORD [rsi + 0x90]  ; RFLAGS
+	push QWORD [rsi + 0x98]  ; CS
+	push QWORD [rsi + 0x80]  ; RIP
+
+	mov rax, [rsi + 0x88]
+	mov cr3, rax
 
 
-	.restore:
-
-	; We need to make sure the new registers are also 16-byte aligned.
-	mov rbx, 0
-	mov rax, rsi
-	and rax, 0xF
-	jz switch_task.fx_rstor
-
-	mov rbx, 0x10
-	sub rbx, rax
-
-	.fx_rstor:
-	fxrstor [rsi + 0xA0 + rbx]
-
-	; Now we load the General-purpose registers  of the new task.
-
+	; Load new GPRs.
 	mov rax, [rsi]
 	mov rbx, [rsi + 0x8]
 	mov rcx, [rsi + 0x10]
@@ -110,23 +95,56 @@ switch_task:
 	mov r14, [rsi + 0x60]
 	mov r15, [rsi + 0x68]
 
-	mov rsp, [rsi + 0x70]
+	; We can't load RSP here, instead, iretq will load it for us.
+
 	mov rbp, [rsi + 0x78]
 
-	; Now we load the new RIP to the stack.
-
+	; If ds is a user data segment, we cannot load rsi normally after setting ds.
+	; We accommodate for this by pushing rsi's future value, then popping it
+	; when we're done. (ss is set by iretq.)
+	push QWORD [rsi + 0x28]
 	push rax
+	mov rax, [rsi + 0xA0]
+	mov ds, ax
+	mov es, ax
+	mov fs, ax
+	mov gs, ax
+	pop rax
+	pop rsi
 
-	mov rax, [rsi + 0x80]
-	xchg [rsp], rax			; This puts the newly loaded RIP (in RAX) on the stack, and restores RAX.
+	.iret:
+	iretq
 
-	; And finally, we can load our new RSI value
-
-	mov rsi, [rsi + 0x28]
-
-	; Now we "return", and everything should be fine.
-
-	.return:
+	.reg_return:
 	ret
 
+; This function takes a pointer to a task struct and loads it. The rip should be
+; pushed to the stack.
+; The main purpose of this function is to unlock the scheduler before delivering
+; control to the task. We cannot do this without a loader task.
+task_loader:
+	call unlock_scheduler
+	call get_current_task
+	mov rdi, 0
+	mov rsi, rax
 
+	pop rax
+	mov [rsi + 0x80], rax; Move the real RIP.
+
+	; Now load the actual segment registers based on ring.
+	mov rax, [rsi + 0xC8] ; ring
+	cmp rax, 0
+	jz task_loader.ring0
+	jmp task_loader.ring3
+
+	.ring3:
+	mov QWORD [rsi + 0xA0], 0x20 | 3
+	mov QWORD [rsi + 0x98], 0x18 | 3
+	jmp task_loader.ring_done
+
+	.ring0:
+	mov QWORD [rsi + 0xA0], 0x10
+	mov QWORD [rsi + 0x98], 0x08
+
+	.ring_done:
+	call switch_task

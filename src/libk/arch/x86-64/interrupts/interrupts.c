@@ -56,14 +56,19 @@ void init_pit(uint16_t reload_value) {
 
 
 
-void set_IDT_entry(uint8_t index, void (*func_ptr)()) {
+void set_IDT_entry(uint8_t index, void (*func_ptr)(), uint8_t user_callable) {
 	uint64_t addr = (uint64_t) func_ptr;
 	IDT[index].offset_low16 = (addr & 0xFFFF);
 	IDT[index].offset_mid16 = ((addr >> 16) & 0xFFFF);
 	IDT[index].offset_hi32 = ((addr >> 32) & 0xFFFFFFFF);
-	IDT[index].zero = 0;
+	IDT[index].ist = 0;
 	IDT[index].zero32 = 0;
-	IDT[index].type_attr = 0x8e;
+	if (user_callable) {
+		IDT[index].type_attr = 0xee;
+	} else {
+		IDT[index].type_attr = 0x8e;
+	}
+
 	IDT[index].selector = 8;
 }
 
@@ -77,12 +82,21 @@ uint8_t init_interrupts() {
 
 
 	/* First comes the exceptions. */
-	set_IDT_entry(0, exception_divide_by_zero);
-	set_IDT_entry(8, exception_double_fault);
+	set_IDT_entry(0, exception_divide_by_zero, 0);
+	set_IDT_entry(6, exception_ud, 0); // Invalid opcode
+	set_IDT_entry(8, exception_double_fault, 0);
+	set_IDT_entry(0xa, exception_ts, 0); // Invalid TSS
+	set_IDT_entry(0xb, exception_np, 0); // Invalid Segment
+	set_IDT_entry(0xc, exception_ss, 0); // Invalid Stack
+	set_IDT_entry(0xd, exception_gpf, 0); // General Protection Fault
+	set_IDT_entry(0xe, exception_pf, 0); // Page Fault
 
 	/* Now hardware IRQs*/
-	set_IDT_entry(0x20, irq0);
-	set_IDT_entry(0x21, irq1);
+	set_IDT_entry(0x20, irq0, 0);
+	set_IDT_entry(0x21, irq1, 0);
+
+	/* interrupt for a syscall. */
+	set_IDT_entry(0x80, syscall_interrupt, 1);
 
 	/* Set up the PIC. */
 	PIC_remap(0x20, 0x28);

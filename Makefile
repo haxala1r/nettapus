@@ -10,7 +10,7 @@ AS := nasm
 EMUL := qemu-system-x86_64 -cpu qemu64 
 
 KERNELFLAGS := -O3 -std=c99 -Wall -Wextra -mcmodel=large -fno-pic -fno-stack-protector -mno-red-zone \
-	-ffreestanding -nostdlib --sysroot="./src/" -isystem="/libk/include/" -pedantic
+	-ffreestanding -nostdlib --sysroot="./src/" -isystem="/libk/include/" -pedantic -mno-sse -msoft-float
 
 # Uncomment this while debugging. 
 #KERNELFLAGS += -DDEBUG -fsanitize=undefined

@@ -12,11 +12,19 @@ page_dir __attribute__((aligned(4096))) k_first_pd;
 page_table __attribute__((aligned(4096))) k_first_table;
 page_table __attribute__((aligned(4096))) k_sec_table;
 
-p_map_level4_table* kgetPML4T(void) {
+p_map_level4_table *kgetPML4T(void) {
 	return &kpml4;
 }
 
-void krefresh_vmm() {
+/* The kernel occupies only a single PDPT, and is forever doomed to live there.
+ * Every task has the Kernel's PDPT mapped into its address space. This allows
+ * system calls, interrupts etc to function properly.
+ */
+pd_ptr_table *kgetPDPT(void) {
+	return &k_first_pdpt;
+}
+
+void krefresh_vmm(void) {
 	loadPML4T((uint64_t*)kpml4.physical_address);
 }
 
@@ -102,7 +110,7 @@ void free_page_struct(struct page_struct *ps) {
 
 
 
-uint64_t alloc_pages(uint64_t amount, uint64_t base, uint64_t limit) {
+uint64_t alloc_pages(uint64_t amount, uint64_t base, uint64_t limit, size_t user_accessible) {
 	/* Allocates some Physical and virtual pages and maps them.
 	 * The virtual pages are guaranteed to be continous. No such thing is guaranteed for the
 	 * physical pages.
@@ -140,13 +148,13 @@ uint64_t alloc_pages(uint64_t amount, uint64_t base, uint64_t limit) {
 			pdpt	= pml4t->child[i / 0x8000000000];
 			if (pdpt == NULL) 	{
 				pml4t->child[i / 0x8000000000] = pdpt = alloc_page_struct();
-				pml4t->entries[i / 0x8000000000] = pdpt->physical_address | 2 | 1;
+				pml4t->entries[i / 0x8000000000] = pdpt->physical_address | 4 | 2 | 1;
 			}
 
 			pd 		= pdpt->child[(i % 0x8000000000) / 0x40000000];
 			if (pd == NULL) 	{
 				pdpt->child[(i % 0x8000000000) / 0x40000000] = pd = alloc_page_struct();
-				pdpt->entries[(i % 0x8000000000) / 0x40000000] = pd->physical_address | 2 | 1;
+				pdpt->entries[(i % 0x8000000000) / 0x40000000] = pd->physical_address | 4 | 2 | 1;
 			}
 
 			pt 		= pd->child[(i % 0x40000000) / 0x20000];
@@ -156,7 +164,7 @@ uint64_t alloc_pages(uint64_t amount, uint64_t base, uint64_t limit) {
 				pt->physical_address = new_table->physical_address;
 
 				pd->child[(i % 0x40000000) / 0x20000] = pt;
-				pd->entries[(i % 0x40000000) / 0x20000] = pt->physical_address | 2 | 1;
+				pd->entries[(i % 0x40000000) / 0x20000] = pt->physical_address | 4 | 2 | 1;
 			}
 
 		}
@@ -187,7 +195,7 @@ uint64_t alloc_pages(uint64_t amount, uint64_t base, uint64_t limit) {
 				break;	/* Failed allocation. */
 			}
 
-			map_memory(page_to_addr(base_pp), i - ia * 0x1000, ia, pml4t);
+			map_memory(page_to_addr(base_pp), i - ia * 0x1000, ia, pml4t, user_accessible);
 			krefresh_vmm();
 
 			return (i - ia * 0x1000);
@@ -206,7 +214,7 @@ uint64_t free_pages(uint64_t base, uint64_t amount) {
 
 
 
-uint8_t map_memory(uint64_t pa, uint64_t va, uint64_t amount, p_map_level4_table* pml4t) {
+uint8_t map_memory(uint64_t pa, uint64_t va, uint64_t amount, p_map_level4_table* pml4t, size_t user_accessible) {
 	/* This function maps an arbitrary amount of continous physical pages to virtual ones.
 	 * A couple things to keep in mind:
 	 * 	This function does not check or care whether the physical page is valid.
@@ -239,7 +247,7 @@ uint8_t map_memory(uint64_t pa, uint64_t va, uint64_t amount, p_map_level4_table
 		/* These NULL checks simply allocate more page structures if they are not found. */
 		struct page_struct *news = alloc_page_struct();
 		pml4t->child[pml4t_index] = news;
-		pml4t->entries[pml4t_index] = news->physical_address | 2 | 1;
+		pml4t->entries[pml4t_index] = news->physical_address | 4 | 2 | 1;
 		pdpt = news;
 	}
 
@@ -248,7 +256,7 @@ uint8_t map_memory(uint64_t pa, uint64_t va, uint64_t amount, p_map_level4_table
 	if (pd == NULL) {
 		struct page_struct *news = alloc_page_struct();
 		pdpt->child[pdpt_index] = news;
-		pdpt->entries[pdpt_index] = news->physical_address | 2 | 1;
+		pdpt->entries[pdpt_index] = news->physical_address | 4 | 2 | 1;
 		pd = news;
 	}
 
@@ -261,7 +269,7 @@ uint8_t map_memory(uint64_t pa, uint64_t va, uint64_t amount, p_map_level4_table
 		newt->physical_address = news->physical_address;
 
 		pd->child[pd_index] = newt;
-		pd->entries[pd_index] = newt->physical_address | 2 | 1;
+		pd->entries[pd_index] = newt->physical_address | 4 | 2 | 1;
 		pt = newt;
 	}
 
@@ -277,7 +285,7 @@ uint8_t map_memory(uint64_t pa, uint64_t va, uint64_t amount, p_map_level4_table
 			if (pdpt == NULL) {
 				struct page_struct *news = alloc_page_struct();
 				pml4t->child[pml4t_index] = news;
-				pml4t->entries[pml4t_index] = news->physical_address | 2 | 1;
+				pml4t->entries[pml4t_index] = news->physical_address | 4 | 2 | 1;
 				pdpt = news;
 			}
 
@@ -286,7 +294,7 @@ uint8_t map_memory(uint64_t pa, uint64_t va, uint64_t amount, p_map_level4_table
 			if (pd == NULL) {
 				struct page_struct *news = alloc_page_struct();
 				pdpt->child[pdpt_index] = news;
-				pdpt->entries[pdpt_index] = news->physical_address | 2 | 1;
+				pdpt->entries[pdpt_index] = news->physical_address | 4 | 2 | 1;
 				pd = news;
 			}
 
@@ -299,15 +307,18 @@ uint8_t map_memory(uint64_t pa, uint64_t va, uint64_t amount, p_map_level4_table
 				newt->physical_address = news->physical_address;
 
 				pd->child[pd_index] = newt;
-				pd->entries[pd_index] = newt->physical_address | 2 | 1;
+				pd->entries[pd_index] = newt->physical_address | 4 | 2 | 1;
 				pt = newt;
 			}
 		}
 
 		/* The page table index needs to be "recalculated" every time. */
 		pt_index		= (va % 0x200000) / 0x1000;
-		pt->entries[pt_index] = (pa) | 2 | 1;
-
+		if (user_accessible) {
+			pt->entries[pt_index] = (pa) | 4 | 2 | 1;
+		} else {
+			pt->entries[pt_index] = (pa) | 2 | 1;
+		}
 		va += 0x1000;
 		pa += 0x1000;
 	}
@@ -403,16 +414,15 @@ uint8_t init_vmm(void) {
 	k_first_pdpt.entries[510] 		= ((uint64_t)k_first_pd.entries     - kernel_virt_base) | 2 | 1;
 
 	k_first_pd.physical_address		= (uintptr_t)k_first_pd.entries    - kernel_virt_base;
-	//k_first_pd.entries[0] 			= ((uint64_t)k_first_table.entries  - kernel_virt_base) | 2 | 1;
 	k_first_pd.entries[1] 			= ((uint64_t)k_first_table.entries  - kernel_virt_base) | 2 | 1;
-	k_first_pd.entries[128] 			= ((uint64_t)k_sec_table.entries  - kernel_virt_base) | 2 | 1;
+	k_first_pd.entries[128] 			= ((uint64_t)k_sec_table.entries  - kernel_virt_base)  | 2 | 1;
 
 
 	k_first_table.physical_address	= (uintptr_t)k_first_table.entries - kernel_virt_base;
 	k_sec_table.physical_address	= (uintptr_t)k_sec_table.entries - kernel_virt_base;
 
 	/* Map the pages the kernel is on. */
-	if (map_memory(kernel_phys_base, kernel_virt_base + kernel_phys_base, 0x200, &kpml4)) {
+	if (map_memory(kernel_phys_base, kernel_virt_base + kernel_phys_base, 0x200, &kpml4, 0)) {
 		kpanic();
 	}
 
@@ -424,7 +434,7 @@ uint8_t init_vmm(void) {
 		page_heap_begin = kernel_virt_base + 0x10000000;
 
 		/* Initially, we only map a part of the allocated pages. */
-		map_memory(page_to_addr(base_pp), page_heap_begin, 128, &kpml4);
+		map_memory(page_to_addr(base_pp), page_heap_begin, 128, &kpml4, 0);
 		krefresh_vmm();
 
 
@@ -439,7 +449,7 @@ uint8_t init_vmm(void) {
 
 
 		/* Now that the allocation mechanism is in place, we can map the whole thing. */
-		map_memory(page_to_addr(base_pp + 128), page_heap_begin + 128 * 0x1000, pp_count - 128, &kpml4);
+		map_memory(page_to_addr(base_pp + 128), page_heap_begin + 128 * 0x1000, pp_count - 128, &kpml4, 0);
 
 	} else {
 		kpanic();
