@@ -1,0 +1,78 @@
+Currently, Nettapus provides traditional system calls: exit(), fork(), exec(),
+wait(), open(), read(), write(), close(), pipe().
+
+I have no intention of making Nettapus' system calls same/similar to UNIX/linux.
+I plan on solving compatability problems in the library, if possible. Thus,
+there are already some differences in behaviour from a traditional UNIX system.
+This file is here to represent some of my thoughts on the matter, as well as
+explain and document the exact differences.
+
+---  open(), read(), write(), close().
+These syscalls may work a bit differently than you would expect. More specifically,
+these syscalls (which are mostly used for files on UNIX-likes) are also used on
+directories. This excludes write().
+
+open() opens a file descriptor to a directory the same way it would for a file.
+A directory cannot be opened for writing, instead a mknode() syscall is planned.
+
+
+read() works pretty much the same, except the "amount" attribute instead is used
+to specify a limit for the directory entry. A "struct dirent" can be found in
+src/libk/include/fs/fs.h
+
+Since struct dirent features a name field, which is undefined in length, a limit
+needs to be passed by the user program in order to prevent overwriting important
+data. This also means that reading more than one entry is impossible. Entries for
+directories will be read before file entries.
+
+write() is refused for a directory.
+
+close() is universal for all file descriptors.
+
+
+---  exit() and wait()
+There's currently no way of passing error codes, so wait() only ever returns 0,
+and exit() doesn't take any arguments.
+
+---  About fork and exec:
+
+I personally don't like the fork and exec system calls. Especially how they're
+used in UNIX-like systems. My hatred towards these two system calls is mostly
+due to their inefficiency. It absolutely boggles my mind why someone would think
+that creating an exact copy of an address space (which very well could be a big
+chunk of memory!) only to replace it a few instructions later (meaning all that
+work is completely wasted). If it is about simplicity, then why not have a
+seperate syscall that executes a program in a new process? What's so complex
+about that? Copying an address space and *then* replacing it seems more complex
+to me as a kernel developer.
+
+fork() and exec() individually can (admittedly) be useful on their own. However
+I believe all of this functionality could be provided in a better, more complete
+set of system calls.
+
+--  About fork()
+
+The fork() system call is a bit of a complex one.
+
+Firstly, you have to create an exact copy of most of the address space. Including
+the stack you're using. Making an exact copy of the current stack is difficult,
+and is better done in assembly (src/libk/arch/x86_64/task/_fork.asm).
+
+Secondly, you have to create a new task structure with that address space,
+then make it so that the only difference between the two tasks is the rax register.
+This is inefficient, as most of the time a process calls fork(), they're most
+likely going to call exec() as well. This means that the kernel has to create
+an exact copy of the address space, only to replace it not a second after.
+
+The current implementation of the fork() call assumes that the caller is on
+the kernel stack of the current task (like on a syscall), and also that only registers required by
+the C standard need to be saved. This should probably be fixed.
+
+---  Ideas for future syscalls.
+As I said, I don't like fork and exec. I plan on replacing them with a prettier
+interface (maybe change exec() so that it creates a new process instead of
+replacing the current one, then get rid of fork entirely?)
+
+
+
+

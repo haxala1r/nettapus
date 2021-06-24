@@ -73,11 +73,12 @@ void *get_stivale_header(struct stivale2_struct *s, uint64_t id) {
 
 
 extern void loadGDT();
-void user_task();
-extern void switch_to_userspace(struct task_registers *from, struct task_registers *to);
-extern uint64_t get_cr3();
 
 void _start(struct stivale2_struct *hdr) {
+	/* We will turn on interrupts as well as task switching etc. when
+	 * everything is properly initialised.
+	 */
+	__asm__("cli;");
 
 	/* We should load our own GDT as soon as possible. */
 	loadGDT();
@@ -112,7 +113,7 @@ void _start(struct stivale2_struct *hdr) {
 	 * need to initialise the file system etc. before the console is ready.
 	 */
 	uint64_t fb_len = fb_width * fb_bpp/8 + fb_height * fb_pitch;
-	map_memory(fb_addr, 0xFFFFFFFFFB000000, fb_len/0x1000, kgetPML4T(), 1);
+	map_memory(fb_addr, 0xFFFFFFFFFB000000, fb_len/0x1000 * 2, kgetPML4T(), 0);
 
 	krefresh_vmm();		/* Refresh the page tables. */
 	if (vga_init(0xFFFFFFFFFB000000, fb_width, fb_height, fb_bpp, fb_pitch)) {
@@ -176,44 +177,72 @@ void _start(struct stivale2_struct *hdr) {
 		kpanic();
 	}
 	serial_puts("TTY OK\r\n");
+	__asm__("sti;");
 
-	if (init_kbd()) {
+	/* We need to create the stdin and stdout fds for the first task.
+	 *
+	 * This will hold the fds for the pipe we created. See, the std output file
+	 * descriptor is actually a pipe, and another task simply reads from this pipe
+	 * and outputs it.
+	 * stdin is returned by init_kbd.
+	 */
+	int32_t stdpipe[2];
+	kpipeu(get_current_task(), stdpipe);
+	struct file_descriptor *wfd = vfs_find_fd(get_current_task(), stdpipe[1]); /* We're copying the write end. */
+
+	struct file_descriptor *nfd = kmalloc(sizeof(*nfd));
+
+	if (nfd == NULL) {
+		serial_puts("OUT OF MEMORY\r\n");
 		kpanic();
 	}
-	serial_puts("Keyboard OK\r\n");
 
-	kputs("Hello, world!\n");
-	uint64_t addr = alloc_pages(1, 0x40000000, 0x40002000, 1);
-	/* open and read the executable. */
-	int32_t fd = kopen("/app", 0);
-	if (fd < 0) {
-		serial_puts("App not found\r\n");
+	memcpy(nfd, wfd, sizeof(*nfd));
+	nfd->next = NULL;
+	nfd->fd = 1;
+
+
+	/* Increase the referance count of the vnode. */
+	struct file_vnode *node = nfd->node;
+	node->streams_open++;
+
+	/* Now create the file descriptor for standard input. */
+	struct file_descriptor *rfd = init_kbd();
+	if (rfd == NULL) {
+		serial_puts("KBD error\r\n");
 		kpanic();
 	}
+	serial_puts("KBD OK\r\n");
+	rfd->next = nfd;
+	rfd->fd = 0;
 
-	if (kread(fd, (void*)addr, 0x1000) < 0) {
-		serial_puts("Failure while reading\r\n");
-		kpanic();
+	kclose(stdpipe[1]); /* The write end is useless for the current task. */
+
+	/* The first program to be executed. */
+	char *init = config_get_variable("init");
+
+	uintptr_t entry_addr;
+	p_map_level4_table *pml4t = load_elf(init, &entry_addr);
+	if (pml4t == NULL) {
+		kputs("Could not find file '");
+		kputs(init);
+		kputs("'\n");
+		__asm__("cli;hlt;");
 	}
-	kclose(fd);
 
-	create_task((void (*)())addr, 3);
+	lock_scheduler();
+	struct task *t = create_task((void (*)())entry_addr, pml4t, 3, NULL);
+	t->fds = rfd;
+	unlock_scheduler();
+
 	while (1) {
-		kputs("Hello\n");
+		char buf[2] = {'\0', '\0'};
+		if (kread(stdpipe[0], buf, 1) != 1) {
+			serial_puts("kread() failed.\r\n");
+			continue;
+		}
+		kputs(buf);
 		__asm__("hlt;");
 	}
 }
-
-void user_task() {
-	volatile size_t i = 0;
-	while (1) {
-		while (i != 0) {
-			i++;
-		}
-		__asm__("int $0x80;" : : "rax"(i) :);
-		i++;
-	}
-}
-
-
 

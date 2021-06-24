@@ -1,0 +1,56 @@
+A kernel stack is necessary for each task. The IRQs cannot run on the user
+stack, because it may be invalid, and it may also leak some important info to
+userspace apps.
+
+The "normal" solution is to have a heap-like structure in the kernel PDPT,
+that will allocate different stacks for each task on creation.
+
+Nettapus handles this issue a bit differently than that. In nettapus, the kernel
+stack for *EVERY* task is at the same address, however, since each task is
+guaranteed to have different page map level 4 tables, it is possible to simply
+map different physical pages to the same address for each task. This simplifies
+stack switching on IRQ entries to such a degree that the only thing we have to
+do is to use intel's IST mechanism, which allows to switch stacks on IRQ entry
+unconditionally. Nettapus takes advantage of this mechanism to automagically switch
+to the kernel stack, and thus, there's absolutely no stack-switching code on
+interrupt entry.
+
+This however, does lead to some problems. (or, well, only one problem thus far.
+This file is here to explain the situation and the solution to it)
+
+Mainly, when a new PML4T is loaded into CR3, the stack also switches *automatically*.
+(that is, if the current stack is the task's kernel or regular stack)
+This is nice in general, and it is what allows us to use the above trick etc,
+however that also means we cannot switch PML4Ts in the middle of C code.
+This leads to problems when loading an ELF file to execute in a new task.
+
+The problem is, when loading from an elf file to execute, you need to copy data
+to the pages allocated for the new task. How are we supposed to do that if
+switching to a different PML4T (and thus accessing the newly allocated pages)
+is impossible?
+
+There are 3 different solutions I can think of:
+
+1: Do the "normal" solution of having a heap-like structure in the kernel PDPT
+to allocate kernel stacks. The user stacks can still use the same mechanism,
+although most benefits (mainly simplicity) are no longer gained as stack-switching
+code at the start of IRQs is mandatory again.
+
+2: Reserve a part of the kernel PDPT. Map the physical pages for the task being
+loaded to that place, then copy the file contents there, and then unmap it.
+This one has to be protected by a lock, but that is fine as this code will mostly
+run inside a syscall handler anyway, thus it is always protected from IRQs.
+This *has* to be in the kernel PDPT, because sometimes it is impossible to know
+which PML4T is currently loaded, and the kernel PDPT is the only page structure
+that is *always* mapped into every task.
+
+3: Do the above but randomly allocate an address for it instead of statically
+reserving one.
+
+At first I had thought #1 was more efficient, but because #1 has to map & load a new
+CR3 and #2 has to map & reload the same CR3, the speed differences are actually
+extremely small (I did not test it, don't take my word). Also I like #2's
+simplicity more, so #2 it is.
+
+Between #3 and #2, I chose #2 because it is more organized, and also simpler
+in logic (thus also faster).

@@ -6,13 +6,13 @@ section .text
 global loadPML4T
 global loadGDT
 global loadTSS
-global get_cr3
+global getCR3
 
 loadPML4T:
 	mov cr3, rdi
 	ret
 
-get_cr3:
+getCR3:
 	mov rax, cr3
 	ret
 

@@ -6,14 +6,32 @@
 #include <fs/ext2.h>
 
 
-size_t ext2_block_in_inode(struct ext2_inode *node, size_t n) {
+size_t ext2_block_in_inode(struct file_system *fs, struct ext2_inode *node, size_t n) {
 	/* Returns the nth data block of the inode. */
 	if (node == NULL) { return 0; }
 
+	/* Direct block */
 	if (n < 12) {
 		return node->direct_block[n];
 	}
-	/* TODO: handle indirect blocks. */
+
+	struct ext2_fs *e2fs = fs->special;
+
+
+	/* Singly indirect blocks. */
+	if (n < (e2fs->block_size / 4)) {
+		uint32_t *buf = kmalloc(e2fs->block_size);
+
+		if (ext2_load_blocks(fs, buf, node->singly_indirect, 1)) {
+			kfree(buf);
+			return 0;
+		}
+
+		uint32_t ret = buf[n - 12];
+		kfree(buf);
+		return ret;
+	}
+
 	return 0;
 }
 

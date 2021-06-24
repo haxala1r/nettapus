@@ -29,12 +29,11 @@ extern "C" {
 #include <stddef.h>
 #include <stdint.h>
 
+struct file_descriptor;
 
 
-void disable_kbd_flush();
-void enable_kbd_flush();
 void kbd_handle_key(uint8_t key);
-uint8_t init_kbd();
+struct file_descriptor *init_kbd();
 void kbd_flush();
 
 

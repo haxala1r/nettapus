@@ -14,11 +14,15 @@ extern "C" {
 #define FS_EXT2      1
 
 
-/* Vnode types 						*/
-#define FILE_NORMAL          0
-#define FILE_PIPE_UNNAMED    1
-#define FILE_PIPE_NAMED      2
+/* fd types 						*/
+#define FILE_DIR             0
+#define FILE_NORMAL          1
+#define FILE_PIPE_UNNAMED    2
+#define FILE_PIPE_NAMED      3
 
+
+/* Flags for open() */
+#define O_CREAT 1
 
 /* Descriptor modes 				*/
 #define FD_READ      0
@@ -175,11 +179,14 @@ struct folder_vnode {
 
 	size_t inode_num;
 
-	/* Whether the folder is currently mounted, and if so, where. */
+	/* Whether the folder is currently mounted, and if so, where.
+	 * This makes it so that if mounted != 0, then use mount_point for all
+	 * operations that attempt to use this node instead. That includes
+	 * permission checking, subfolders/files, and pretty much everything else.
+	 */
 	size_t mounted;
 	struct folder_tnode *mount_point;
 
-	/* This solves the mutual exclusion problem. */
 	SEMAPHORE *mutex;
 
 	/* A folder doesn't need any queues.*/
@@ -194,14 +201,28 @@ struct folder_tnode {
 };
 
 
+/* This dirent structure is returned by kread when used on a drectory. */
+struct dirent {
+	uint64_t inode;
+	uint64_t offset;
+	uint64_t len;
+	uint64_t type;
+	char name[1];
+};
+
+
 
 struct file_descriptor {
-	void *node;
+	void *node; /* THIS REFERST TO A VNODE, NOT A TNODE. */
 	size_t file; /* Whether it points to a file or folder. 1 if file. */
 
 	int32_t fd;  /* The actual number used to access this descriptor. */
 
 	size_t pos;
+
+	/* Currently, this isn't honoured very much. Change that in the future maybe
+	 * ?
+	 */
 	size_t mode;
 
 	struct file_descriptor *next;
@@ -216,9 +237,11 @@ size_t fs_check_drive(struct drive *d);
 char **fs_parse_path(char *path);
 void fs_free_path(char **arr);
 
+struct file_vnode *vfs_load_file_at(struct folder_vnode *parent, struct file_tnode *tnode);
+struct folder_vnode *vfs_load_folder_at(struct folder_vnode *parent, struct folder_tnode *tnode);
 
 size_t vfs_dir_load_list(struct folder_vnode *vnode);
-struct file_vnode *vfs_search_file_vnode(char *path);
+void *vfs_search_vnode(char *path, int64_t *file);
 
 size_t vfs_unload_fnode(struct file_vnode *f);
 size_t vfs_unload_dnode(struct folder_vnode *f);
@@ -238,11 +261,14 @@ struct file_vnode *mknode_file(char *path);
 
 struct file_descriptor *vfs_create_fd(struct task *t, void *node, size_t file, size_t mode);
 
-int32_t pipeu(struct task *t, int32_t ret[]);
+int32_t kpipeu(struct task *t, int32_t ret[]);
 int32_t kopen(char *path, size_t mode);
 int64_t kread(int32_t fd, void *buf, int64_t amount);
 int64_t kwrite(int32_t fd, void *buf, int64_t amount);
 int32_t kclose(int32_t fd);
+
+int64_t ktell(int32_t fd);
+int64_t kseek(int32_t fd, int64_t pos);
 
 size_t init_vfs(struct file_system *root);
 size_t init_fs(void);

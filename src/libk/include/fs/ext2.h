@@ -157,7 +157,7 @@ struct drive;
 size_t ext2_load_blocks(struct file_system *fs, void *buf, size_t block_addr, size_t count);
 size_t ext2_write_blocks(struct file_system *fs, void *buf, size_t block_addr, size_t count);
 size_t ext2_load_group_des(struct file_system *fs, struct ext2_group_des *dest, size_t group);
-size_t ext2_block_in_inode(struct ext2_inode *node, size_t n);
+size_t ext2_block_in_inode(struct file_system *fs, struct ext2_inode *node, size_t n);
 size_t ext2_alloc_blocks(struct file_system *fs, size_t count, uint32_t *ret);
 
 size_t ext2_load_inode(struct file_system *fs, struct ext2_inode *dest, size_t inode_num);

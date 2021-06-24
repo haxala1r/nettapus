@@ -1,6 +1,8 @@
 
 #include <keyboard.h>
 #include <tty.h>
+#include <task.h>
+#include <fs/fs.h>
 #include <mem.h>
 
 /* Whether the keyboard interrupts will work or not. It works similarly
@@ -24,9 +26,13 @@ uint8_t numlock = 0;
 uint8_t scrolllock = 0;
 
 
-char *key_buf;
-size_t key_buf_limit = 0x200;
-size_t key_buf_cursor = 0;
+struct file_vnode *kbd_pipe;
+
+/* This is a buffer where the key's pressed by the user will be kept in until
+ * enter is pressed, in which case the data here is flushed to kbd_pipe.
+ */
+char key_buf[0x200];
+size_t key_buf_cursor = 0; /* Where we are in the buffer.*/
 
 /* This is the keyset we'll look up our characters on.
  * '#' represents invalid characters.
@@ -37,37 +43,20 @@ char keyset1_up[0xFF] 	= "#*!'^+%&/()=_?\b\tQWERTYUIOP[]\n*ASDFGHJKL;'`*\\ZXCVBN
 char keyset1_low[0xFF] 	= "#*1234567890-=\b\tqwertyuiop[]\n*asdfghjkl;'`*\\zxcvbnm,./*** *************789-456+1230.###**";
 
 
-void disable_kbd_flush() {
-	keyboard_disabled++;
-}
-void enable_kbd_flush() {
-	if (keyboard_disabled == 0) {
-		return;
-	};
-	keyboard_disabled--;
-}
-
 void kbd_flush() {
 	/* This function flushes the keys that have been put into the buffer to
-	 * the screen.
+	 * the pipe.
 	 */
 
-	if (keyboard_disabled) {
-		return;
-	}
 	if (key_buf_cursor != 0) {
-		if (key_buf_cursor >= key_buf_limit) {
-			/* There must have been an error somewhere. Fix that. */
-			key_buf_cursor = 0;
-			return;
-		}
+		size_t to_cpy = ((kbd_pipe->size + key_buf_cursor) > 0x1000) ? (0x1000 - kbd_pipe->size) : (key_buf_cursor);
+		memcpy(((char *)kbd_pipe->pipe_mem) + kbd_pipe->size, key_buf, to_cpy);
+		kbd_pipe->size += to_cpy;
 
-		/* Print the data to screen.*/
-		kput_data(key_buf, key_buf_cursor);
-
-		/* Clear the buffer. */
-		memset(key_buf, 0, key_buf_cursor);
 		key_buf_cursor = 0;
+
+		/* Wake up any task that might be waiting for input. */
+		signal_queue(kbd_pipe->read_queue);
 	}
 }
 
@@ -114,7 +103,6 @@ void kbd_handle_key(uint8_t key) {
 			 * state when pressed instead of being set only when pressed.
 			 */
 			case KBD_CAPSLOCK_PRESSED:
-
 				capslock ^= 1;
 				break;
 			case KBD_NUMLOCK_PRESSED:
@@ -138,24 +126,63 @@ void kbd_handle_key(uint8_t key) {
 	}
 
 	/* Handle upper- and lower-case letters. */
-	if (lshift || rshift || capslock) {
+	if ((keyset1_up[key] == '\b') && (key_buf_cursor != 0)) {
+		key_buf[--key_buf_cursor] = '\0';
+		kputc('\b');
+	} else if (keyset1_up[key] == '\b') {
+		/* key_buf_cursor == 0 */
+
+	} else if (lshift || rshift || capslock) {
 		key_buf[key_buf_cursor++] = keyset1_up[key];
+		kputc(keyset1_up[key]);
 	} else {
 		key_buf[key_buf_cursor++] = keyset1_low[key];
+		kputc(keyset1_low[key]);
+	}
+
+	if (keyset1_up[key] == '\n') {
+		key_buf[key_buf_cursor - 1] = '\0';
+		kbd_flush();
 	}
 
 	return;
 }
 
-uint8_t init_kbd() {
-	/* The keyboard driver keeps all pressed keys in a buffer, and this buffer
-	 * is flushed periodically.
-	 * TODO: complete this.
+struct file_descriptor *init_kbd() {
+	/* The keyboard driver creates a (custom) pipe, and returns a file descriptor
+	 * to it. This descriptor can be added to any task's list of fds. When
+	 * a keyboard IRQ is raised, the key will be written to this pipe.
 	 */
-	key_buf = kmalloc(key_buf_limit);
-	if (key_buf == NULL) {
-		return 1;
+	lock_scheduler();
+	kbd_pipe = kmalloc(sizeof(*kbd_pipe));
+	if (kbd_pipe == NULL) {
+		return NULL;
 	}
-	return 0;
+	memset(kbd_pipe, 0, sizeof(*kbd_pipe));
+
+	kbd_pipe->pipe_mem = kmalloc(0x1000);
+	kbd_pipe->mutex = create_semaphore(1);
+	kbd_pipe->streams_open = 2;
+
+	kbd_pipe->open = vfs_open_file;
+	kbd_pipe->read = vfs_read_pipe;
+	kbd_pipe->write = NULL; /* Writing is not permitted to this pipe. */
+	kbd_pipe->close = vfs_close_file;
+
+	kbd_pipe->read_queue = kmalloc(sizeof(QUEUE));
+	memset(kbd_pipe->read_queue, 0, sizeof(QUEUE));
+	kbd_pipe->write_queue = kmalloc(sizeof(QUEUE));;
+	memset(kbd_pipe->write_queue, 0, sizeof(QUEUE));
+
+	struct file_descriptor *ret = kmalloc(sizeof(*ret));
+	memset(ret, 0, sizeof(*ret));
+
+	ret->file = 1;
+	ret->node = kbd_pipe;
+	ret->mode = 0;
+	ret->fd = 0;
+
+	unlock_scheduler();
+	return ret;
 }
 

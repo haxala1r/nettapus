@@ -1,21 +1,28 @@
 %include "src/libk/arch/x86-64/interrupts/macros.asm"
 GLOBAL syscall_interrupt
-EXTERN syscall_handler
+EXTERN syscall_table
+EXTERN syscall_count
 
+; This interrupt MUST NOT be called by a kernel task. It will trash the ds and ss
+; with user values otherwise.
 syscall_interrupt:
-	cli
-	hlt
-	mov [rsp-8], rax
-	mov ax, 0x10
-	mov ds, ax
-	mov ss, ax
-	mov rax, [rsp-8]
 	PUSHAQ
 	cld
-	mov rdi, rax
-	mov rsi, rbx
-	call syscall_handler
-	mov bx, 0x23
-	mov ds, bx
+
+	cmp [syscall_count], rax
+	jb .done ; This was the fix. run it and see.
+	je .done
+	; Pass the parameters in registers, and call the appropriate syscall handler.
+	; The specific system call is determined by rax.
+	mov rax, [syscall_table + rax * 0x8]
+	mov rdi, rbx
+	mov rsi, rcx
+	mov rdx, rdx ;
+
+	call rax
+
+	mov [rsp + 14 * 8], rax
+
+	.done:
 	POPAQ
 	iretq

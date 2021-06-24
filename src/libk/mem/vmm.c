@@ -98,6 +98,7 @@ void free_page_struct(struct page_struct *ps) {
 			uint64_t bit = i % 64;
 
 			byte8 = byte8 & (0xFFFFFFFFFFFFFFFF ^ ((uint64_t)1 << bit));
+			page_heap_bitmap[i/64] = byte8;
 			break;
 
 		}
@@ -105,9 +106,6 @@ void free_page_struct(struct page_struct *ps) {
 	}
 	return;
 }
-
-
-
 
 
 uint64_t alloc_pages(uint64_t amount, uint64_t base, uint64_t limit, size_t user_accessible) {
@@ -394,6 +392,109 @@ uint8_t unmap_memory(uint64_t va, uint64_t amount, p_map_level4_table* pml4t) {
 	return GENERIC_SUCCESS;
 }
 
+p_map_level4_table *copy_addr_space(p_map_level4_table *pml4t) {
+	if (pml4t == NULL) { return NULL; }
+
+	p_map_level4_table *ret = alloc_page_struct();
+	if (ret == NULL) {
+		serial_puts("wtf!!\r\n");
+	}
+	memset(ret, 0, 0x2000);
+
+	ret->child[511] = kgetPDPT();
+	ret->entries[511] = kgetPDPT()->physical_address | 2 | 1;
+
+	/* This is a pointer to the base of the memory reserved for mapping physical
+	 * addresses when accessing them is necessary.
+	 */
+	char *phys_base = (char*)0xFFFFFFFF98000000;
+
+	/* This is the temporary buffer used to store the data on the page. */
+	void *buf = kmalloc(0x1000);
+
+	/* Recreate the memory mappings */
+	for (size_t i = 0; i < 511; i++){
+		/* The last PDPT belongs to the kernel, and thus must not be copied.*/
+		pd_ptr_table *pdpt = pml4t->child[i];
+		if (pdpt == NULL) {
+			continue;
+		}
+		for (size_t j = 0; j < 512; j++) {
+			page_dir *pd = pdpt->child[j];
+			if (pd == NULL) {
+				continue;
+			}
+
+			for (size_t k = 0; k < 512; k++) {
+				page_table *pt = pd->child[k];
+				if (pt == NULL) {
+					continue;
+				}
+				for (size_t l = 0; l < 512; l++) {
+					uint64_t entry = pt->entries[l];
+					if (entry == 0) {
+						continue;
+					}
+
+					uint64_t vp = l + k * 512 + j * 512 * 512 + i * 512 * 512 * 512;
+					uint64_t va = vp * 0x1000;
+
+					/* We need to copy the entire page. */
+
+					map_memory(entry, 0xFFFFFFFF98000000, 1, ret, 0);
+					loadPML4T(getCR3());
+
+					memcpy(buf, phys_base, 0x1000);
+
+
+					uint64_t pp = allocpp();
+
+					map_memory(pp * 0x1000, va, 1, ret, 1);
+					map_memory(pp * 0x1000, 0xFFFFFFFF98000000, 1, ret, 0);
+					loadPML4T(getCR3());
+
+					memcpy(phys_base, buf, 0x1000);
+				}
+			}
+		}
+	}
+	unmap_memory(0xFFFFFFFF98000000, 1, ret);
+
+	kfree(buf);
+	return ret;
+}
+
+uint64_t get_page_entry(p_map_level4_table *pml4t, uint64_t va) {
+	if (pml4t == NULL) { return 0; }
+
+	va &= 0x0000FFFFFFFFF000;
+	uint64_t pml4t_index = va / 0x8000000000;
+	pd_ptr_table *pdpt = pml4t->child[pml4t_index];
+	if (pdpt == NULL) { return 0; }
+
+	uint64_t pdpt_index  	= (va % 0x8000000000) / 0x40000000;
+	page_dir *pd = pdpt->child[pdpt_index];
+	if (pd == NULL) { return 0; }
+
+	uint64_t pd_index = (va % 0x40000000) / 0x200000;
+	page_table *pt = pd->child[pd_index];
+	if (pt == NULL) { return 0; }
+
+	uint64_t pt_index = (va % 0x200000) / 0x1000;
+
+	return pt->entries[pt_index];
+}
+
+uint8_t is_mapped(uintptr_t va, p_map_level4_table *pml4t) {
+	/* Checks whether a virtual address is mapped. */
+	if (get_page_entry(pml4t, va) & 1) {
+		return 1; /* The va is mapped.*/
+	}
+	return 0;
+}
+
+
+
 
 extern void kpanic();
 
@@ -455,8 +556,13 @@ uint8_t init_vmm(void) {
 		kpanic();
 	}
 
+	/* Map a "kernel stack". IRQs will always use that address as a stack, so
+	 * we need to map something.
+	 */
+	base_pp = allocpp();
+	map_memory(page_to_addr(base_pp), 0xFFFFFF7FFFFFF000, 1, &kpml4, 0);
+
 	/* Load the new page tables. */
 	loadPML4T((uint64_t*)kpml4.physical_address);
-
 	return GENERIC_SUCCESS;
 }

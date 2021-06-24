@@ -34,7 +34,7 @@ int32_t vfs_close_file(struct task *t, struct file_descriptor *fd) {
 		struct folder_vnode *node = fd->node;
 		node->streams_open--;
 		if ((node->streams_open == 0) && (node->cached_links == 0)) {
-			vfs_unload_dnode(node);
+			//vfs_unload_dnode(node);
 		}
 	}
 
@@ -55,7 +55,11 @@ int32_t kclose(int32_t fd) {
 
 		return fnode->close(get_current_task(), fdes);
 	} else {
-		/* TODO */
+		/* TODO: make another function specifically for directories, or rename
+		 * the existing one.
+		 */
+		return vfs_close_file(get_current_task(), fdes);
 	}
+
 	return GENERIC_SUCCESS;
 }

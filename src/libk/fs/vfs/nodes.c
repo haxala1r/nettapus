@@ -92,14 +92,12 @@ void free_dir_list(struct folder_vnode *vnode) {
 size_t vfs_dir_load_list(struct folder_vnode *vnode) {
 	if (vnode == NULL) { return ERR_INVALID_PARAM; }
 
-	acquire_semaphore(vnode->mutex);
 	free_dir_list(vnode);
 
 	/* Get directory listings (only tnodes). */
 	vnode->subfiles = vnode->fs->driver->list_files(vnode->fs, vnode->inode_num, &vnode->subfile_count);
 	vnode->subfolders = vnode->fs->driver->list_folders(vnode->fs, vnode->inode_num, &vnode->subfolder_count);
 
-	release_semaphore(vnode->mutex);
 	return GENERIC_SUCCESS;
 }
 
@@ -110,6 +108,9 @@ size_t vfs_dir_load_list(struct folder_vnode *vnode) {
  * Keep in mind that whenever a folder is loaded, t-nodes of its children
  * are always loaded along with it. This helps us search for files/folders
  * faster.
+ *
+ * These two functions assume that the caller has acquired the semaphore of the
+ * parent directory.
  */
 struct folder_vnode *vfs_load_folder_at(struct folder_vnode *parent, struct folder_tnode *tnode) {
 
@@ -123,10 +124,8 @@ struct folder_vnode *vfs_load_folder_at(struct folder_vnode *parent, struct fold
 		}
 	}
 
-	acquire_semaphore(parent->mutex);
 	size_t inode = parent->fs->driver->openat(parent->fs, parent->inode_num, tnode->folder_name);
-	release_semaphore(parent->mutex);
-	if (inode <= 2) {
+	if (inode < 2) {
 		/* Caller should try again. */
 		vfs_dir_load_list(parent);
 		return NULL;
@@ -174,10 +173,8 @@ struct file_vnode *vfs_load_file_at(struct folder_vnode *parent, struct file_tno
 		}
 	}
 
-	acquire_semaphore(parent->mutex);
 	size_t inode = parent->fs->driver->openat(parent->fs, parent->inode_num, tnode->file_name);
-	release_semaphore(parent->mutex);
-	if (inode <= 2) {
+	if (inode < 2) {
 		/* Caller should try again. */
 		vfs_dir_load_list(parent);
 		return NULL;
@@ -215,58 +212,94 @@ struct file_vnode *vfs_load_file_at(struct folder_vnode *parent, struct file_tno
 }
 
 
-struct file_vnode *vfs_search_file_vnode(char *path) {
-	/* This function loads/finds a file vnode. If it doesn't find one of the nodes
+void *vfs_search_vnode(char *path, int64_t *file) {
+	/* This function loads/finds a vnode. If it doesn't find one of the nodes
 	 * in the path cached, it will load them. If one of the nodes in the path
 	 * just doesn't exist, it returns NULL.
+	 *
+	 * This function returns a vnode, NOT a tnode.
 	 */
 	if (root_tnode == NULL) { return NULL; } /* The vfs hasn't been initialised yet. */
+
 	char **arr = fs_parse_path(path);
-	struct folder_tnode *cur_dir = root_tnode;
-	if (root_tnode->vnode->mounted) {
-		cur_dir = root_tnode->vnode->mount_point;
+
+	/* Take the current working directory into account. */
+	struct folder_vnode *cur_dir = root_tnode->vnode;
+
+	if ((path[0] != '/') && (get_current_task()->current_dir != NULL)) {
+		cur_dir = get_current_task()->current_dir;
 	}
-	struct folder_tnode *par_dir = cur_dir; /* Parent of cur_dir*/
+
+	if (cur_dir->mounted) {
+		cur_dir = cur_dir->mount_point->vnode;
+	}
+	struct folder_vnode *par_dir = cur_dir;
 	size_t depth = 0;
 
-	if ((arr[0] == NULL) || (cur_dir == NULL)) {
+	if (cur_dir == NULL) {
 		fs_free_path(arr);
 		return NULL;
 	}
 
-	while (arr[depth + 1] != NULL) {
-		cur_dir = vfs_search_dd(par_dir->vnode, arr[depth]);
+	/* Return the root node if the parameter's empty and/or consists of a slash.*/
+	if (arr[0] == NULL) {
+		*file = 0;
+		fs_free_path(arr);
+		return cur_dir;
+	}
 
-		if (cur_dir == NULL) {
+	while (arr[depth + 1] != NULL) {
+		struct folder_tnode *t = vfs_search_dd(par_dir, arr[depth]);
+
+		if (t == NULL) {
 			/* The node does not exist. */
 			fs_free_path(arr);
 			return NULL;
 		}
 
-		if (cur_dir->vnode == NULL) {
+		if (t->vnode == NULL) {
 			/* The vnode exists, but hasn't been loaded yet. Load it. */
-			if (vfs_load_folder_at(par_dir->vnode, cur_dir) == NULL) {
+			acquire_semaphore(par_dir->mutex);
+
+			if (vfs_load_folder_at(par_dir, t) == NULL) {
+				release_semaphore(par_dir->mutex);
 				fs_free_path(arr);
 				return NULL;
 			}
+
+			release_semaphore(par_dir->mutex);
 		}
+		cur_dir = t->vnode;
 
 		depth++;
 		par_dir = cur_dir;
 	}
 
-	struct file_tnode *ret = vfs_search_df(cur_dir->vnode, arr[depth]);
-	if (ret == NULL) {
-		/* The file we're searching for does not exist. */
-		fs_free_path(arr);
-		return NULL;
+	*file = 1;
+	struct file_tnode *tnode = vfs_search_df(cur_dir, arr[depth]);
+	if (tnode == NULL) {
+		/* The file we're searching for does not exist, or is a directory. */
+		tnode = (void*)vfs_search_dd(cur_dir, arr[depth]);
+		if (tnode == NULL) {
+			/* Doesn't exist. */
+			fs_free_path(arr);
+			return NULL;
+		}
+		/* is a directory. */
+		*file = 0;
 	}
-	if (ret->vnode == NULL) {
+	if (tnode->vnode == NULL) {
 		/* It exists, but hasn't been loaded yet. */
-		vfs_load_file_at(cur_dir->vnode, ret);
+		acquire_semaphore(cur_dir->mutex);
+		if (*file) {
+			vfs_load_file_at(cur_dir, tnode);
+		} else {
+			vfs_load_folder_at(cur_dir, (void*)tnode);
+		}
+		release_semaphore(cur_dir->mutex);
 	}
 	fs_free_path(arr);
-	return ret->vnode;
+	return tnode->vnode;
 }
 
 size_t vfs_unload_fnode(struct file_vnode *f) {

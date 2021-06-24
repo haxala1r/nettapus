@@ -1,5 +1,6 @@
 #include <task.h>
 #include <mem.h>
+#include <err.h>
 
 /*
  * This file implements a resource queue.
@@ -26,9 +27,11 @@ void wait_queue(QUEUE *q) {
 	if (q->first_task == NULL) {
 		q->first_task = get_current_task();
 		q->last_task = q->first_task;
+		q->last_task->next = NULL;
 	} else {
 		q->last_task->next = get_current_task();
 		q->last_task = q->last_task->next;
+		q->last_task->next = NULL;
 	}
 
 	block_task();
@@ -40,13 +43,14 @@ void wait_queue(QUEUE *q) {
 
 void signal_queue(QUEUE *q) {
 	/* This function simply wakes up the next task on the queue. */
-
+	if (q == NULL) {
+		return;
+	}
 	if (q->amount_waiting == 0) {
 		return;
 	}
 
 	lock_task_switches();
-
 
 	if (q->first_task != NULL) {
 		q->amount_waiting--;

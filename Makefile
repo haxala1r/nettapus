@@ -13,7 +13,7 @@ KERNELFLAGS := -O3 -std=c99 -Wall -Wextra -mcmodel=large -fno-pic -fno-stack-pro
 	-ffreestanding -nostdlib --sysroot="./src/" -isystem="/libk/include/" -pedantic -mno-sse -msoft-float
 
 # Uncomment this while debugging. 
-#KERNELFLAGS += -DDEBUG -fsanitize=undefined
+KERNELFLAGS += -DDEBUG -fsanitize=undefined
 
 KERNELLINK := -ffreestanding -lgcc  -nostdinc  -nostdlib -static -mcmodel=kernel \
 	-z max-page-size=0x1000
@@ -36,7 +36,7 @@ IMG := disk.img
 
 all: bios
 
-bios: kernel
+bios: kernel 
 	@dd if=/dev/zero of=$(IMG) bs=1M count=32
 	@echo -e "2048 63488 0x80 *\n" | sfdisk $(IMG)
 	# The only partition (EXT2)

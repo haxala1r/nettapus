@@ -25,7 +25,7 @@ struct ext2_dir_entry *ext2_search_dir(struct file_system *fs, struct ext2_inode
 	size_t block_addr;
 
 	while (1) {
-		block_addr = ext2_block_in_inode(dir_node, block);
+		block_addr = ext2_block_in_inode(fs, dir_node, block);
 		if (block_addr == 0) {
 			goto fail;
 		}

@@ -20,7 +20,7 @@ size_t ext2_mknod(struct file_system *fs, size_t parent_inode, char *file_name, 
 	size_t block_addr;
 	struct ext2_dir_entry *entry;
 	while (1) {
-		block_addr = ext2_block_in_inode(parent, block);
+		block_addr = ext2_block_in_inode(fs, parent, block);
 		if (ext2_load_blocks(fs, buf, block_addr, 1)) {
 			kfree(buf);
 			kfree(parent);

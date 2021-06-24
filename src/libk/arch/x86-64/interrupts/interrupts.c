@@ -61,7 +61,7 @@ void set_IDT_entry(uint8_t index, void (*func_ptr)(), uint8_t user_callable) {
 	IDT[index].offset_low16 = (addr & 0xFFFF);
 	IDT[index].offset_mid16 = ((addr >> 16) & 0xFFFF);
 	IDT[index].offset_hi32 = ((addr >> 32) & 0xFFFFFFFF);
-	IDT[index].ist = 0;
+	IDT[index].ist = 1; /* Always switch stacks. */
 	IDT[index].zero32 = 0;
 	if (user_callable) {
 		IDT[index].type_attr = 0xee;
@@ -110,6 +110,5 @@ uint8_t init_interrupts() {
 	outb(PIC_MASTER_DATA, 0xFC);
 	outb(PIC_SLAVE_DATA, 0xFF);
 
-	__asm__("sti;");
 	return 0;
 }

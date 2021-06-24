@@ -8,6 +8,10 @@ int64_t vfs_write_file(struct file_descriptor *fdes, void *buf, int64_t amount) 
 	if (buf == NULL)        { return -ERR_INVALID_PARAM; }
 	if (fdes->node == NULL) { return -ERR_INVALID_PARAM; }
 
+	if (fdes->mode != FD_WRITE) {
+		return -ERR_INVALID_PARAM;
+	}
+
 	struct file_vnode *node = fdes->node;
 	acquire_semaphore(node->mutex);
 
@@ -32,6 +36,10 @@ int64_t vfs_write_pipe(struct file_descriptor *fdes, void *buf, int64_t amount) 
 	if (fdes == NULL)       { return -ERR_INVALID_PARAM; }
 	if (buf == NULL)        { return -ERR_INVALID_PARAM; }
 	if (fdes->node == NULL) { return -ERR_INVALID_PARAM; }
+
+	if (fdes->mode != FD_WRITE) {
+		return -ERR_INVALID_PARAM;
+	}
 
 	struct file_vnode *node = fdes->node;
 	acquire_semaphore(node->mutex);
@@ -77,7 +85,8 @@ int64_t kwrite(int32_t fd, void *buf, int64_t amount) {
 	if (!fdes->file)   { return -ERR_INVALID_PARAM; }
 
 	struct file_vnode *fnode = fdes->node;
-	if (fnode == NULL) { return -ERR_INVALID_PARAM; }
+	if (fnode == NULL)        { return -ERR_INVALID_PARAM; }
+	if (fnode->write == NULL) { return -ERR_INVALID_PARAM; }
 
 	return fnode->write(fdes, buf, amount);
 }

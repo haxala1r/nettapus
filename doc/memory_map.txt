@@ -1,6 +1,45 @@
+Almost all of the virtual address space is left for application use.
 
-0xFFFFFFFF80000000 and up is reserved for kernel use.
+All application data, code etc. MUST be here. If any address above 0xFFFFFF7000000000
+is attempted to be accessed, then the kernel will refuse to load the executable
+(and terminate the current task if an already loaded task attempts to access it)
+      ^
+      |
+      |
+      |
+0xFFFFFF7000000000
+      |
+      |
+      |--------> is left unmapped, so that if a task accidentally (or
+      |          intentionally) overruns its stack, it triggers a page fault.
+      |
+0xFFFFFF7000001000
+      |
+      |
+      |--------> is where a task's regular stack is mapped.
+      |
+      |
+0xFFFFFF7000002000
+      |
+      |
+      |--------> CURRENTLY UNUSED.
+      |
+      |
+0xFFFFFF7FFFFFF000
+      |
+      |
+      |--------> The kernel stack of the current task.
+      |
+      |
+0xFFFFFF8000000000 and up is the kernel Page Directory Pointer table. This is always
+mapped into every task's address space.
 
+0xFFFFFFFF80000000
+      |
+      |
+      |-------------> CURRENTLY UNUSED.
+      |
+      |
 0xFFFFFFFF80200000
       |
       |
@@ -10,7 +49,7 @@
 0xFFFFFFFF80400000
       |
       |
-      |-------------> Kernel modules & their stacks (WIP).
+      |-------------> Kernel modules (this is currently unused, but planned).
       |
       |
 0xFFFFFFFF90000000
@@ -23,6 +62,12 @@
       |
       |
       |-------------> CURRENTLY UNUSED.
+      |
+      |
+0xFFFFFFFF98000000
+      |
+      |
+      |-------------> this is the reserved area in solution #2 (see kernel_stack.txt)
       |
       |
 0xFFFFFFFFA0000000

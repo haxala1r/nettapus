@@ -34,9 +34,10 @@ int64_t ext2_read_file(struct file_system *fs, size_t inode, void *dest_buf, siz
 
 	while (bytes) {
 		/* Get the block address of the next block;*/
-		block_addr = ext2_block_in_inode(&node, block);
+		block_addr = ext2_block_in_inode(fs, &node, block);
 		if (block_addr == 0) {
-			break;
+			kfree(data_buf);
+			return -ERR_DISK;
 		}
 
 		/* Load the block into memory. */

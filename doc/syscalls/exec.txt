@@ -1,0 +1,17 @@
+The exec() syscall on Nettapus differs from a UNIX system only in how arguments
+to the newly executed program are passed.
+
+Nettapus does not have environment variables. I simply don't believe they are
+necessary, as arguments should be enough to accomplish what environment variables
+do.
+
+Thus, exec() on Nettapus takes two arguments. The file name, and argv.
+
+The newly executed program only recieves the amount of arguments (argc) in the rax register.
+The arguments for a program can be accessed by using a seperate syscall (getarg()) by
+specifying an index. The individual arguments are kept in kernel-space, in a
+linked list (struct task_arg is used for this).
+
+I am aware of how inefficient this can be, and how it can cause the kernel to
+easily run out of heap space. Until I figure out a cleaner way of passing
+arguments though, this is the way it shall be done.

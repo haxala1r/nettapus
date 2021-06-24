@@ -13,32 +13,55 @@ int32_t vfs_open_file(struct file_vnode *node, struct task *t, size_t mode) {
 		return -1;
 	}
 
-	node->streams_open++;
-
 	release_semaphore(node->mutex);
 	return fdes->fd;
 }
+
+int32_t vfs_open_dir(struct folder_vnode *node, struct task *t, size_t mode) {
+	if (node == NULL) { return -ERR_INVALID_PARAM; }
+	if (t == NULL) { return -ERR_INVALID_PARAM; }
+	if (mode != FD_READ) { return -ERR_INVALID_PARAM; }
+
+	acquire_semaphore(node->mutex);
+	struct file_descriptor *fdes = vfs_create_fd(t, node, 0, mode);
+	if (fdes == NULL) {
+		return -1;
+	}
+	release_semaphore(node->mutex);
+	return fdes->fd;
+}
+
 
 
 int32_t kopen(char *path, size_t mode) {
 	if (path == NULL) { return -1;}
 
 	/* This function searches the existing nodes. */
-	struct file_vnode *node = vfs_search_file_vnode(path);
-	/* TODO: also search for a folder vnode here. */
+	int64_t type = 0;
+	void *node = vfs_search_vnode(path, &type);
 
 	if (node == NULL) {
-		/* The file or folder doesn't exist. */
-		if (mode == 0) {
-			/* If the create flag hasn't been set, return an error. */
-			return -ERR_NO_RESULT;
+		if (mode & O_CREAT) {
+			node = mknode_file(path);
+			type = 1; /* file. */
+			if (node == NULL) {
+				return -ERR_NOT_FOUND;
+			}
+		} else {
+			return -ERR_NOT_FOUND;
 		}
+	}
+	if (type == 0) {
+		/* It's a directory. */
+		return vfs_open_dir(node, get_current_task(), mode);
+	}
 
-		/* We need to create a new node. */
-		node = mknode_file(path);
+	struct file_vnode *vnode = node;
+
+	/* It's a file. */
+	if (vnode->open == NULL) {
+		return -ERR_INVALID_PARAM;
 	}
-	if (node->open == NULL) {
-		return -1;
-	}
-	return node->open(node, get_current_task(), mode);
+
+	return vnode->open(node, get_current_task(), mode);
 }

@@ -1,0 +1,11 @@
+Hello, and welcome to Nettapus!
+
+Currently, a very limited userspace is provided (as has been said in README.md)
+consisting of only 3 commands (4 if you count exit) : sh, ls and cat.
+
+I do plan on porting a proper shell (and more commands of course) but for now,
+this is how it is.
+
+Sorry if you find it lackluster, I've been working on this for a long time, and
+really wanted something I could show ok? I promise I'll port an actual libc, ok?
+I'll get an actual shell ok? ok???

@@ -1,29 +1,9 @@
 Below is a list of things that should be done, and a few ideas on how to do them.
 Remove things from here once they are completed, and add it to changelog.txt
 
-	- VFS : Have the kopen() and kclose() functions, which are open() and close()
-	for kernel usage, let you open and close directories as well.
-
 	- Scheduler : Fix the bug in the queue and semaphore functions. The bug is that
 	if either a queue or semaphore is destroyed while there are tasks that are
 	waiting on that queue/semaphore, they will stay blocked forever.
-
-+	- Scheduler : Allow switch_task() to switch to user mode code with a parameter.
-	Also allow for user-mode tasks in general, probably also adding things like
-	kernel-stacks per process, pids, uids, gids, etc. etc.
-
-+	- Userspace : Implement syscalls. Starting with exit(), open(), close(),
-	read(), write() (in that order) seems appropriate. A syscall table needs
-	to be made. An ELF parser, a program loader etc. need to be made.
-
-+	- Scheduler : Proper memory should be allocated for tasks. This is going to
-	become especially relevant when we need to allocate kernel stacks and cannot
-	use the task's own stack for interrupts (i.e. userspace tasks). This could
-	be integrated into the VMM's "page heap" thingy which provides page-aligned
-	memory. Just like there, the memory would be broken up into same-sized blocks,
-	(preferably page-sized) and they could be passed out as needed. The VMM
-	could then rely on this new heao instead of having a huge heap of memory (pun intended)
-	all to itself. Currently, only a page-long stack is allocated for tasks.
 
 	- Heap : Extending the above, it is probably a good idea to allow different
 	options for heaps. So that one could attempt to allocate from a different heap,
@@ -46,3 +26,14 @@ Remove things from here once they are completed, and add it to changelog.txt
 	interesting because allocation doesn't always require the creation of a new chunk,
 	the overhead is small and it's O(log(N)), also it seems like a very elegant
 	solution in general.
+
+	- Scheduler/Memory management: maybe have all kernel stacks in one place
+	instead of mapping them at a particular address? this is unnecessary as of
+	now, but it could be useful in particular situations where only the kernel
+	PDPT is actually mapped.
+
+	- Add more documentation.
+
+	- Port a proper LIBC.
+
+	- Port more stuff.

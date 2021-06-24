@@ -115,18 +115,25 @@ void putc(char c, uint32_t fg, uint32_t bg) {
 	putchar(c, cursorx++, cursory, fg, bg);
 }
 
+void kputc(char c) {
+	if (tty_lock->current_count != 0) {
+		return;
+	}
+	putc(c, foreground_color, background_color);
+}
+
 void kput_data(char *data, size_t count) {
 	if (data == NULL) { return; }
 
 	for (size_t i = 0; i < count ; i++) {
 		putc(data[i], foreground_color, background_color);
 	}
+
 }
 
 void kputs_color(char *str, uint32_t fg, uint32_t bg) {
 	if (str == NULL) { return; }
 
-	disable_kbd_flush();
 	acquire_semaphore(tty_lock);
 
 	while (*str) {
@@ -134,9 +141,7 @@ void kputs_color(char *str, uint32_t fg, uint32_t bg) {
 		str++;
 	}
 
-
 	release_semaphore(tty_lock);
-	enable_kbd_flush();
 
 	return;
 }

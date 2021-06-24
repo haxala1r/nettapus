@@ -5,7 +5,7 @@
 
 
 
-int32_t pipeu(struct task *t, int32_t ret[]) {
+int32_t kpipeu(struct task *t, int32_t ret[]) {
 	if (t == NULL)   { return -ERR_INVALID_PARAM; }
 	if (ret == NULL) { return -ERR_INVALID_PARAM; }
 
@@ -29,7 +29,7 @@ int32_t pipeu(struct task *t, int32_t ret[]) {
 	pipe_vnode->open = vfs_open_file;
 	pipe_vnode->read = vfs_read_pipe;
 	pipe_vnode->write = vfs_write_pipe;
-	pipe_vnode->close = NULL;
+	pipe_vnode->close = vfs_close_file;
 
 	/* Now create two file descriptors, and return them. */
 	ret[0] = pipe_vnode->open(pipe_vnode, t, FD_READ);

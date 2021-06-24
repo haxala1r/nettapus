@@ -99,6 +99,9 @@ size_t ext2_alloc_blocks(struct file_system *fs, size_t count, uint32_t *ret) {
 			goto fail;
 		};
 		if (count > gdes.free_block_count) {
+			/* TODO: This should probably be changed, as this one check makes it
+			 * impossible for us to use a really fragmented file system.
+			 */
 			continue;
 		}
 

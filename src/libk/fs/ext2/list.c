@@ -33,7 +33,7 @@ struct file_tnode *ext2_list_files(struct file_system *fs, size_t inode, size_t 
 
 	while (1) {
 		/* Load the current block. */
-		block_addr = ext2_block_in_inode(parent, block);
+		block_addr = ext2_block_in_inode(fs, parent, block);
 		if (block_addr == 0) {
 			break;
 		}
@@ -111,7 +111,7 @@ struct folder_tnode *ext2_list_folders(struct file_system *fs, size_t inode, siz
 
 	while (1) {
 		/* Load the current block. */
-		block_addr = ext2_block_in_inode(parent, block);
+		block_addr = ext2_block_in_inode(fs, parent, block);
 		if (block_addr == 0) {
 			break;
 		}

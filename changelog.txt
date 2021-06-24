@@ -1,24 +1,47 @@
-	- Added new header and C files config.h and config.c allowing nettapus to now
-	read a configuration file on boot to load settings. The settings loaded
-	from this file will grow over time, but I do plan on hardcoding defaults in
-	case the file isn't found. The system just loads variables from the file,
-	each system component is responsible for asking for the appropriate variables
-	and also having default values in case the user doesn't specify them.
-	This takes care of one of the TODOs.
+	- Added a basic ELF parser, along with a hello world user application.
 
-	- Fixed various instances of undefined behaviour in the kernel. This ranges
-	from the NULL-ptr usage in the VMM, to the various out-of-bounds shifts in
-	the PMM, to a wrong mapping in (again) the VMM. Also added an option to
-	the Makefile to compile with ubsan has been added.
+	- Scheduler : The scheduler is now capable of loading and executing user tasks. The
+	MMX, FPU and SSE registers are unfortunately not saved/restored yet, so
+	applications are (for now!) not allowed to use them.
 
-	- A serial driver has been added, in order to ease debugging. Various
-	debug messages will be added over time. The driver cannot accept input, it's
-	more of a debug output for now. Also, this takes care of one of the TODOs.
+	- Scheduler : Every task has an assigned kernel stack. This kernel stack is used to
+	executes syscalls, IRQs etc. The kernel stack is always mapped to the exact
+	same address, and each task has a different physical page mapped into that
+	address. This allows for every interrupt to execute on a different stack,
+	even though they all use the same address, by simply taking advantage of
+	paging.
 
-	- A mysterious bug where resetting QEMU from the toolbar after running
-	Nettapus caused Nettapus to behave unexpectedly. This most likely resulted
-	from one of the UBs that was fixed.
+	- Scheduler : Likewise, the user stack is also allocated and used in the same
+	way. I.e. it is always mapped to the same address, and different pages are
+	mapped for different tasks. See doc/kernel_stack.txt for more info, although
+	it does not go into much detail about actual kernel stacks yet.
 
-	- Fixed multiple bugs in the ext2 driver that resulted in the wrong calculation of
-	a directory entry's name length. (I don't even know how I managed to screw
-	that up in the first place).
+	- Scheduler : There is now a task loader function (written in assembly) that
+	executes at the start of a task (before actually jumping to the task).
+	Its whole purpose is to unlock the scheduler before the task executes, and
+	then it jumps.
+
+	- Heap : Fixed minor bug that caused more pages to be mapped than what was
+	actually allocated for the heap.
+
+	- Syscalls : There is now a syscall interface. Interrupt number 0x80 is
+	reserved for this interface. Currently, only exit(), read(), write(), open()
+	close(), fork(), wait() and exec() are implemented. This is good enough for simple shell
+	commands, as demonstrated in the sample program that is loaded on start-up.
+	(in /bin/sh)
+	Hopefully, I can port another, better shell soon (and a libc of course).
+
+	- Task termination : The ability to terminate tasks has been added. There is
+	always a new task created at start-up. This task has the sole purpose of
+	cleaning up tasks in the termination queue. The terminate_task() function
+	is there for processes that want to exit. A syscall (rax=0 rbx=err_code) exit
+	is provided for user-space tasks.
+
+	- Standard input-output : the application loaded by the kernel at bootup
+	(currently root/bin/sh) has 2 file descriptors open at start-up, 0 referring
+	to standard input (the keyboard) and 1 referring to standard output (screen)
+
+	- Keyboard : The way keyboard input is handled has been changed. When a
+	keyboard IRQ comes in, the character is first printed to screen and
+	added to a buffer (if not enter) and if it is a newline, then the buffer is
+	flushed to a vnode. The first loaded application has a file descriptor open to said vnode.

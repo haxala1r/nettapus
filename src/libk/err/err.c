@@ -56,18 +56,22 @@ char *type_check_kinds[] = {
 };
 
 void __ubsan_handle_pointer_overflow() {
+	serial_puts("ubsan_ptr_overflow\r\n");
 	__asm__("cli;hlt;");
 }
 
 void __ubsan_handle_out_of_bounds() {
+	serial_puts("ubsan_out_of_bounds\r\n");
 	__asm__("cli;hlt;");
 }
 
 void mismatch_nullptr() {
+	serial_puts("ubsan_nullptr\r\n");
 	__asm__("cli;hlt;");
 }
 
 void mismatch_misaligned() {
+	serial_puts("ubsan_misaligned\r\n");
 	__asm__("cli;hlt;");
 }
 
@@ -76,7 +80,9 @@ void __ubsan_handle_type_mismatch_v1(struct type_mismatch_data *data, uintptr_t 
 		/* NULL pointer access.*/
 		serial_puts("UBSAN : NULL pointer access. \r\n");
 	} else if (data->alignment && (ptr & (data->alignment - 1))) {
-		serial_puts("UBSAN : Misaligned address access. \r\n");
+		serial_puts("UBSAN : Misaligned address access. \r\n Alignment needed: ");
+		serial_putx(data->alignment);
+		serial_puts("\r\n");
 	} else {
 		serial_puts("UBSAN : Insufficient size\r\nTYPE: ");
 		serial_puts(data->typedes->name);
@@ -97,25 +103,36 @@ void __ubsan_handle_type_mismatch_v1(struct type_mismatch_data *data, uintptr_t 
 }
 
 void __ubsan_handle_add_overflow() {
+	serial_puts("ubsan_add_overflow\r\n");
 	__asm__("cli;hlt;");
 }
 
 void __ubsan_handle_sub_overflow() {
+	serial_puts("ubsan_sub_overflow\r\n");
 	__asm__("cli;hlt;");
 }
 
 void __ubsan_handle_mul_overflow() {
+	serial_puts("ubsan_mul_overflow\r\n");
 	__asm__("cli;hlt;");
 }
 
 void __ubsan_handle_divrem_overflow() {
+	serial_puts("ubsan_divrem_overflow\r\n");
 	__asm__("cli;hlt;");
 }
 
 void __ubsan_handle_shift_out_of_bounds() {
+	serial_puts("ubsan_shift_out_of_bounds\r\n");
 	__asm__("cli;hlt;");
 }
 
 void __ubsan_handle_negate_overflow() {
+	serial_puts("ubsan_negate_overflow\r\n");
+	__asm__("cli;hlt;");
+}
+
+void __ubsan_handle_vla_bound_not_positive() {
+	serial_puts("ubsan_vla_bound_not_positive");
 	__asm__("cli;hlt;");
 }

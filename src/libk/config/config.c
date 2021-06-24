@@ -153,6 +153,7 @@ uint8_t reload_config(char *f) {
 		memset(line_buf, 0, line_len);
 		if ((stat = read_line(fd, line_buf, line_len))) {
 			parse_config_line(line_buf);
+			kclose(fd);
 			kfree(line_buf);
 			if (stat == ERR_EOF) {
 				break;
@@ -160,6 +161,7 @@ uint8_t reload_config(char *f) {
 			return stat;
 		}
 		if ((stat = parse_config_line(line_buf))) {
+			kclose(fd);
 			if (stat == ERR_NO_RESULT) {
 				continue;
 			}

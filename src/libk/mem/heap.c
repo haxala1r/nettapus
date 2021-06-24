@@ -88,7 +88,7 @@ chunk_header_t *divideChunk(uint64_t size, chunk_header_t* chunk) {
 		 */
 		size += 1;
 	}
-	if (chunk->size <= (size + sizeof(chunk_header_t) + 7)) {
+	if (chunk->size <= (size + sizeof(chunk_header_t) + 15)) {
 		/* This makes sure that there is enough space to actually split & align. */
 		return NULL;
 	}
@@ -99,13 +99,13 @@ chunk_header_t *divideChunk(uint64_t size, chunk_header_t* chunk) {
 	chunk_header_t *c2;
 
 	uintptr_t c2_addr = ((uintptr_t)chunk) + size + sizeof(chunk_header_t);
-	if (c2_addr % 8) {
+	if (c2_addr % 16) {
 		/* Always have it 16-bytes aligned. */
-		c2_addr += 8 - (c2_addr % 8);
+		c2_addr += 16 - (c2_addr % 16);
 	}
 	c2 = (chunk_header_t *) c2_addr;
 
-	c2->size = chunk->size - (size + sizeof(chunk_header_t));
+	c2->size = chunk->size - (c2_addr - ((uintptr_t)chunk));
 	if (chunk->next != NULL) {
 		/* We need to update the next chunk as well. */
 		chunk->next->prev = c2;
@@ -312,7 +312,7 @@ uint8_t kfree(void *ptr) {
 
 uint8_t init_heap(void) {
 	/* Maps 256 pages to the heap. 0xFFFFFFFFA0000000 is the kernel's heap's address.*/
-	if (map_memory(page_to_addr(allocpps(256)), 0xFFFFFFFFA0000000, 512, kgetPML4T(), 1)) {
+	if (map_memory(page_to_addr(allocpps(256)), 0xFFFFFFFFA0000000, 256, kgetPML4T(), 1)) {
 		return 1;
 	}
 	krefresh_vmm();

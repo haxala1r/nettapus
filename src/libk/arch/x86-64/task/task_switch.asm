@@ -19,10 +19,20 @@ switch_task:
 	; RSI should contain a pointer to the registers of the task to be switched to.
 	; RDI should contain a pointer to the registers of the task to be switched from.
 
+	; No matter what we do we must ensure that DS is the kernel's data segment
+	; until we load the task's DS.
+	push rax
+	mov rax, 0x10
+	mov ds, ax
+	mov ss, ax
+	pop rax
+
+	; If rsi == NULL, we can't switch. If rdi == NULL, we can't save.
 	cmp rsi, 0
 	jz switch_task.reg_return
 	cmp rdi, 0
 	jz switch_task.load
+
 	; Save the current values for all the registers we're going to push for iretq.
 	.save:
 	mov QWORD [rdi + 0xA0], ss  ; SS
@@ -68,16 +78,24 @@ switch_task:
 
 	; Load.
 	.load:
+	; The kernel rsp must be loaded along with cr3, because there is a chance the old
+	; stack isn't mapped in the new page mappings.
+	mov rax, [rsi + 0x88]
+	mov cr3, rax
+
+	; Since we MUST switch to the new kernel stack of the task, we will.
+	; However, since irq0 uses the top of the stack, we risk overwriting the
+	; irq0's return info on the stack if we use it normally. To solve this,
+	; the interrupts will use the top of the kernel stack, we'll use the bottom.
+	mov rsp, [rsi + 0xA8]
+	sub rsp, 0x800
+
 	; Now set up the stack how iretq expects to find it.
 	push QWORD [rsi + 0xA0]  ; SS
 	push QWORD [rsi + 0x70]  ; RSP
 	push QWORD [rsi + 0x90]  ; RFLAGS
 	push QWORD [rsi + 0x98]  ; CS
 	push QWORD [rsi + 0x80]  ; RIP
-
-	mov rax, [rsi + 0x88]
-	mov cr3, rax
-
 
 	; Load new GPRs.
 	mov rax, [rsi]

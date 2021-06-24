@@ -20,17 +20,7 @@
 	`int32_t (*open)(struct file_vnode *, TASK *, uint8_t);`
 
 #### Comments
-	- AVOID COMMENTS WHERE YOU CAN. I used to comment literally everything,
-	and learned later that was a mistake.
-
-	You don't believe me? Well, here's the kind of shit you get when you're
-	commenting *literally everything.*
-
-	`` i++; /* Increment our iterator on every iteration */ ``
-
-	Doesn't look bad you say? Yeah, until every line looks like this and
-	you start to feel dizzy trying to understand which comments document
-	important behaviour 3 months after you wrote it.
+	- AVOID COMMENTS WHERE YOU CAN.
 
 	Note that this does not mean that you shouldn't comment complex things,
 	but rather when you feel you have to comment, you should be trying to
@@ -41,14 +31,12 @@
 	Ideally, there wouldn't be any comments, and what the code does would
 	be obvious by just looking at it.
 
-	- Comments should use `/**/` instead of `//`
+	- Comments should use `/**/` instead of `//`, at all times.
 
 #### Variables
 
-	- Comments should be simple and straight-forward
-
 	- When making a short NULL-check (or something similar), do it on a single
-	line with braces like this: `if (thing == NULL) { return NULL; };`
+	line (with braces) like this: `if (thing == NULL) { return NULL; };`
 
 	- Header files should declare things in this order:
 
@@ -75,7 +63,7 @@
 
 	The semaphore and the queue structures are a good example of what to typedef.
 	They are not supposed to be modified/read in any way outside of their
-	respective functions (they are "opaque").
+	respective functions (they are "opaque")(there are exceptions, of course).
 
 
 	- When defining a variable with a certain struct, don't use the same name
@@ -117,10 +105,6 @@
 	Note that this example of what **NOT** to do also clashes with multiple
 	rules from the *Structs* section, meaning this is bad anyway.
 
-	Some would complain about function prototypes not fitting in a single
-	line. Well, if you use so many parameters that it doesn't fit, then you're
-	doing something wrong anyway.
-
 	Still, try to keep your paramater names short, descriptive and simple.
 	Don't name them `bytes_to_write` in a pointless endevaor to be descriptive.
 
@@ -134,6 +118,5 @@
 #### Alignment and Indentation
 	- Use tabs for indentation, spaces for alignment. Tab size does not matter.
 
-	I.e. when you need to align macro values, use spaces. When you need to
-	indent a block of code in a function, use tabs.
-
+	I.e. when you need to align macro values so that it looks cooler,
+	use spaces. When you need to indent a block of code in a function, use tabs.

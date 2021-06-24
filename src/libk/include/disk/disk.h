@@ -21,6 +21,7 @@ struct semaphore; /* Full definition in <task.h>*/
  * well.
  */
 struct disk {
+	/* Whether it is IDE, USB etc. etc. */
 	uint8_t type;
 	size_t sector_count;
 

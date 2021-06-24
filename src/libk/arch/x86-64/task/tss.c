@@ -52,7 +52,7 @@ struct gdt_entry tss_entry;
 struct task_state_segment *cur_tss = NULL;
 
 
-extern void loadTSS(void *tss);
+extern void loadTSS(void *tss); /* defined in gdt.asm */
 
 uint8_t load_tss(struct task_state_segment *t) {
 	if (t == NULL) { return ERR_INVALID_PARAM; }
@@ -77,6 +77,7 @@ uint8_t load_tss(struct task_state_segment *t) {
 	return GENERIC_SUCCESS;
 }
 
+
 uint8_t init_tss() {
 	lock_scheduler();
 	if (cur_tss != NULL) {
@@ -90,23 +91,18 @@ uint8_t init_tss() {
 	}
 	memset(cur_tss, 0, sizeof(*cur_tss));
 
-	/* This is the "main" stack for syscalls. This stack is only used for
-	 * a short time at the start of a syscall, right before the handler allocates
-	 * another stack for itself. This is done in order to prevent various problems
-	 * that would occur when two tasks try to use a syscall at the same time.
-	 *
-	 * TODO: Figure out how you're gonna actually "allocate" those stacks
-	 * instead of being an all-talk dipshit. Perhaps another heap? or maybe
-	 * an adjustment to the current one to allow the caller to request things
-	 * like alignment etc. etc. (you want your stack to be aligned don't you?)
-	 * an AVL tree is looking more and more like an excellent idea, the only
-	 * downside being complexity.
+	/* The "kernel stack" of a process is always at the same address. Each process
+	 * has a different page mapped though, so this means interrupts won't overwrite
+	 * each other.
 	 */
-	uintptr_t stack = ((uintptr_t)kmalloc(0x1000)) + 0x1000;
+	uintptr_t stack = ((uintptr_t)0xFFFFFF7FFFFFF000) + 0x1000;
 	cur_tss->rsp0_low = (uint32_t)(stack);
 	cur_tss->rsp0_high = (uint32_t)(stack >> 32);
+	cur_tss->ist1_low = (uint32_t)(stack);
+	cur_tss->ist1_high = (uint32_t)(stack >> 32);
 
 	load_tss(cur_tss);
 	unlock_scheduler();
 	return GENERIC_SUCCESS;
 }
+

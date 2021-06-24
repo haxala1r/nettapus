@@ -1,0 +1,19 @@
+This file is here to document what each folder in the src/ directory is purposed
+for.
+
+every path is relative to the project's root.
+
+src/kernel is where every kernel source that is compiled into the kernel is kept.
+kernel modules etc. don't count, as they are not compiled into the kernel. In
+the future, when there are proper modules to speak of, they will probably go in
+src/modules
+
+src/usr is where userspace applications, their sources etc. go. Everything here
+has its own build script, simply because it wouldn't be feasible to fit everything
+inside a single makefile.
+
+These sources are built with a build shell script instead of a make file.
+
+src/usr/bin is where the sources for root/bin are kept.
+
+src/usr/lib is where the library sources for root/lib are kept.

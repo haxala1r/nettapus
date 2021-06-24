@@ -16,7 +16,7 @@ extern "C" {
  * Loading a Page-Map Level 4 Table is one of the rare things we can't do in C. Because
  * of this, they are defined in an assembly file.
  */
-extern void  loadPML4T(volatile uint64_t*);
+extern void  loadPML4T(uint64_t*);
 
 
 /* kernel_virt_base + kernel_phys_base == the beginning of the kernel binary. */
@@ -63,7 +63,7 @@ typedef struct memory_map memory_map_t;
  * as they will all contain the same things anyway. This may change later on.
  */
 struct page_struct {
-	volatile uint64_t entries[512] __attribute__((aligned(4096))); //at most 1024 entries.
+	uint64_t entries[512] __attribute__((aligned(4096))); //at most 1024 entries.
 
 	/*
 	 * This stores all the lower-level tables' virtual addresses, so that we can actually
@@ -83,7 +83,7 @@ struct page_struct {
  * tables in the hierarchy, and thus don't need the lower[] field.
  */
 struct page_table {
-	volatile uint64_t entries[512] __attribute__((aligned(4096)));
+	uint64_t entries[512] __attribute__((aligned(4096)));
 
 	uintptr_t physical_address;
 } __attribute__((aligned(4096))) __attribute__((packed));
@@ -132,6 +132,7 @@ typedef struct heap heap_t;
 //generic things.
 memory_map_t* getPhysicalMem();
 p_map_level4_table* kgetPML4T();
+uint64_t *getCR3(); /* Gets the currently loaded PML4T. */
 pd_ptr_table *kgetPDPT(void);
 heap_t* kgetHeap();		//returns a pointer to kernel's heap.
 uint64_t page_to_addr(uint64_t);	//tells you at which address a page starts. doesn't check the validity of the page.
@@ -139,6 +140,7 @@ uint64_t addr_to_page(uint64_t);	//tells you at which page the address resides i
 void _create_block(uint64_t, uint64_t, memory_block_t*);	//internal function. creates a block object from address and length.
 void krefresh_vmm();
 struct page_struct *alloc_page_struct(void);
+void free_page_struct(struct page_struct *ps);
 
 //Physical memory management.
 uint8_t ispaValid(uint64_t);	//tells whether an address is valid or not.(physical addresses). returns 1 if it is.
@@ -158,7 +160,10 @@ uint8_t freepp(uint64_t);			//"frees" a single physical page.
 //Virtual memory management
 
 uint8_t map_memory(uint64_t phys, uint64_t virt, uint64_t amount, p_map_level4_table*, size_t user_accessible);	//maps a single physical page to a virtual page. doesn't check if pp is avilable.
-uint8_t unmap_page(uint64_t virt, uint64_t amount, p_map_level4_table*);	//unmaps a virtual page, also frees the physical page attached to it.
+uint8_t unmap_memory(uint64_t virt, uint64_t amount, p_map_level4_table*);	//unmaps a virtual page, also frees the physical page attached to it.
+uint64_t get_page_entry(p_map_level4_table *pml4t, uint64_t va);
+uint8_t is_mapped(uintptr_t va, p_map_level4_table *pml4t);
+p_map_level4_table *copy_addr_space(p_map_level4_table *pml4t);
 
 /* Allocates a random physical page and a random virtual one. Starting address is returned. */
 uint64_t alloc_pages(uint64_t amount, uint64_t base, uint64_t limit, size_t user_accessible);
