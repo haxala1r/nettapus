@@ -75,8 +75,7 @@ sanitizers are set to panic()), so you can rest assured that there are no major
 UBs.
 
 I do plan on adding tests, but they're kind of difficult to test a whole OS. I
-will probably add at least a program that stress-tests the system calls though,
-with various inputs.
+will probably add at least a program that stress-tests the system calls though.
 
 # Contributions
 See CONTRIBUTING.md
