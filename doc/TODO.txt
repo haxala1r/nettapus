@@ -1,7 +1,7 @@
 Below is a list of things that should be done, and a few ideas on how to do them.
 Remove things from here once they are completed, and add it to changelog.txt
 
-	- Scheduler : Fix the bug in the queue and semaphore functions. The bug is that
+    - Scheduler : Fix the bug in the queue and semaphore functions. The bug is that
 	if either a queue or semaphore is destroyed while there are tasks that are
 	waiting on that queue/semaphore, they will stay blocked forever.
 

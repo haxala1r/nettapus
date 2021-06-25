@@ -52,6 +52,6 @@ size_t init_serial();
 void serial_puts(char *);
 void serial_putx(uint64_t val);
 int64_t print_stat(int64_t stat);
-
+void kpanic(void);
 
 #endif /* ERR_H */

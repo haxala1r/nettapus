@@ -64,7 +64,7 @@ p_map_level4_table *load_elf(char *file_name, uintptr_t *entry_point) {
 	p_map_level4_table *pml4t = create_address_space();
 	if (pml4t == NULL) {
 		serial_puts("load_elf() could not create address space.\r\n");
-		kpanic();
+		kpanic(); /* This is likely a fatal error. */
 	}
 
 	/* This next part has to happen atomically. */
